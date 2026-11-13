@@ -127,6 +127,7 @@ a{color:var(--accent)}
 </header>
 <div class="bannerwrap"><div id="demoBanner" class="banner hidden"></div></div>
 <main>
+  <div id="pfBar" class="chips" style="flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-bottom:10px"></div>
   <section id="tab-portfoy" class="tab active"></section>
   <section id="tab-gorunum" class="tab"></section>
   <section id="tab-tarama" class="tab"></section>
@@ -154,13 +155,31 @@ const CLS = {
   FUND: {label:'TEFAS Fonu', cur:'TRY', color:'#4fd1c5', hint:'3 harfli fon kodu, örn. TTE'},
   FX:   {label:'Döviz', cur:'TRY', color:'#f6ad55', hint:'USD, EUR veya GBP'},
   GOLD: {label:'Gram Altın', cur:'TRY', color:'#f0c419', hint:''},
+  COM:  {label:'Emtia', cur:'TRY', color:'#e07a5f', hint:''},
+  BES:  {label:'BES Fonu', cur:'TRY', color:'#63b3ed', hint:'TEFAS emeklilik fonu kodu, örn. AEA'},
   TRY:  {label:'TL Nakit/Mevduat', cur:'TRY', color:'#9aa4b2', hint:''}
 };
+// Emtialar: Yahoo vadeli kontrat fiyatları. gram:true olanlar TL/gram'a çevrilir (ons fiyatı × USD/TRY ÷ 31,1035)
+const COMS = {
+  GUMUS:    {name:'Gram Gümüş', yf:'SI=F', gram:true, unit:'gram', kw:'gümüş, silver'},
+  PLATIN:   {name:'Gram Platin', yf:'PL=F', gram:true, unit:'gram', kw:'platin, platinum'},
+  PALADYUM: {name:'Gram Paladyum', yf:'PA=F', gram:true, unit:'gram', kw:'paladyum, palladium'},
+  ONS:      {name:'Ons Altın', yf:'GC=F', unit:'ons', kw:'altın, gold, ons'},
+  BRENT:    {name:'Brent Petrol', yf:'BZ=F', unit:'varil', kw:'brent, petrol, oil, opec'},
+  WTI:      {name:'WTI Petrol', yf:'CL=F', unit:'varil', kw:'wti, petrol, crude, opec'},
+  DOGALGAZ: {name:'Doğal Gaz', yf:'NG=F', unit:'MMBtu', kw:'doğal gaz, doğalgaz, natural gas, lng'},
+  BAKIR:    {name:'Bakır', yf:'HG=F', unit:'libre', kw:'bakır, copper'}
+};
+const curOfH = (cls, sym) => cls === 'US' ? 'USD' : cls === 'COM' ? (COMS[sym] && COMS[sym].gram ? 'TRY' : 'USD') : 'TRY';
+const curSym = (cls, sym) => curOfH(cls, sym) === 'USD' ? ' $' : ' ₺';
+const dispName = (cls, sym) => cls === 'GOLD' ? 'Gram Altın' : cls === 'COM' ? (COMS[sym] ? COMS[sym].name : sym) : cls === 'FX' ? String(sym).toUpperCase() + '/TRY' : String(sym).toUpperCase();
 const MARKET = [
   {key:'y:XU100.IS', name:'BIST 100'},
   {key:'y:^GSPC', name:'S&P 500'},
   {key:'y:USDTRY=X', name:'USD/TRY'},
-  {key:'gold', name:'Gram Altın'}
+  {key:'gold', name:'Gram Altın'},
+  {key:'gram:SI=F', name:'Gram Gümüş'},
+  {key:'y:BZ=F', name:'Brent Petrol'}
 ];
 const H = 21; // sinyal ufku: ~1 ay (işlem günü)
 // Geniş tarama evreni (artık işlem görmeyen bir kod varsa sessizce atlanır)
@@ -174,8 +193,18 @@ const store = {
   set(k, v){ mem[k] = v; try{ localStorage.setItem('pusula.'+k, JSON.stringify(v)); }catch(e){} },
   del(k){ delete mem[k]; try{ localStorage.removeItem('pusula.'+k); }catch(e){} }
 };
-let holdings = store.get('holdings', []);
-let settings = Object.assign({workerUrl:'', targets:{BIST:25, US:20, FUND:15, FX:15, GOLD:20, TRY:5}, extraBist:'', extraUs:'', scanFunds:''}, store.get('settings', {}));
+const DEF_TARGETS = {BIST:25, US:20, FUND:15, FX:15, GOLD:15, COM:5, TRY:5};
+let settings = Object.assign({workerUrl:'', extraBist:'', extraUs:'', scanFunds:''}, store.get('settings', {}));
+// Portföyler: her biri ayrı varlık listesi ve hedef dağılımla tutulur (ör. Ana Portföy, BES sözleşmeleri)
+let portfolios = store.get('portfolios', null);
+if(!Array.isArray(portfolios) || !portfolios.length){
+  portfolios = [{id:'main', name:'Ana Portföy', kind:'genel', holdings:store.get('holdings', []), targets:Object.assign({}, DEF_TARGETS, settings.targets || {})}];
+  store.set('portfolios', portfolios);
+}
+let pf = portfolios.find(x => x.id === store.get('activePf', '')) || portfolios[0];
+let holdings = pf.holdings;
+function savePf(){ pf.holdings = holdings; store.set('portfolios', portfolios); store.set('activePf', pf.id); }
+const isBes = () => pf.kind === 'bes';
 let scanRes = [], scanning = false, scanTime = null, scanDone = 0, scanTotal = 0, scanFilter = 'new', discovered = {us:[], bist:[]};
 let signalLog = store.get('log', []);
 let series = {}, news = [], newsDemo = false, lastUpdate = null, newsFilter = 'mine';
@@ -205,7 +234,9 @@ function keyFor(h){
     case 'US': return 'y:' + s;
     case 'FX': return 'y:' + s + 'TRY=X';
     case 'GOLD': return 'gold';
+    case 'COM': { const c = COMS[s]; return c ? (c.gram ? 'gram:' + c.yf : 'y:' + c.yf) : null; }
     case 'FUND': return 'f:' + s;
+    case 'BES': return 'e:' + s;
     default: return null;
   }
 }
@@ -225,11 +256,13 @@ async function _loadKey(key, persist){
   if(!persist){ // tarama verisi telefona kaydedilmez (depolama dolmasın); sunucu zaten önbellekliyor
     if(key.startsWith('y:')) return fetchJSON('/history?range=2y&s=' + encodeURIComponent(key.slice(2)));
     if(key.startsWith('f:')) return fetchJSON('/fund?days=730&code=' + encodeURIComponent(key.slice(2)));
+    if(key.startsWith('e:')) return fetchJSON('/fund?days=730&type=EMK&code=' + encodeURIComponent(key.slice(2)));
   }
   let d;
-  if(key === 'gold'){ const [g, f] = await Promise.all([loadKey('y:GC=F'), loadKey('y:USDTRY=X')]); d = combineGold(g, f); }
+  if(key === 'gold' || key.startsWith('gram:')){ const yf = key === 'gold' ? 'GC=F' : key.slice(5); const [g, f] = await Promise.all([loadKey('y:' + yf), loadKey('y:USDTRY=X')]); d = combineGold(g, f); }
   else if(key.startsWith('y:')) d = await fetchJSON('/history?range=2y&s=' + encodeURIComponent(key.slice(2)));
   else if(key.startsWith('f:')) d = await fetchJSON('/fund?days=730&code=' + encodeURIComponent(key.slice(2)));
+  else if(key.startsWith('e:')) d = await fetchJSON('/fund?days=730&type=EMK&code=' + encodeURIComponent(key.slice(2)));
   store.set('cache:'+key, {t:Date.now(), d});
   return d;
 }
@@ -245,11 +278,11 @@ function combineGold(g, f){
 /* Demo veri: gerçek değildir; uygulamayı denemek için üretilir */
 function hash(s){ let h = 2166136261; for(const ch of s){ h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
 function rng(seed){ return () => { seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
-const DEMO_BASE = {'y:USDTRY=X':42.4,'y:EURTRY=X':49.1,'y:GBPTRY=X':55.8,'gold':5650,'y:XU100.IS':11200,'y:^GSPC':6600,'y:THYAO.IS':318,'y:ASELS.IS':182,'y:VOO':610,'y:AAPL':248,'f:TTE':3.4};
+const DEMO_BASE = {'gram:SI=F':72,'gram:PL=F':1480,'gram:PA=F':1290,'y:BZ=F':68,'y:CL=F':64,'y:NG=F':3.6,'y:HG=F':4.9,'y:USDTRY=X':42.4,'y:EURTRY=X':49.1,'y:GBPTRY=X':55.8,'gold':5650,'y:XU100.IS':11200,'y:^GSPC':6600,'y:THYAO.IS':318,'y:ASELS.IS':182,'y:VOO':610,'y:AAPL':248,'f:TTE':3.4};
 function demoSeries(key){
   const r = rng(hash(key));
   const fx = key.includes('TRY=X');
-  const base = DEMO_BASE[key] ?? (key.startsWith('f:') ? 1 + r()*10 : key.endsWith('.IS') ? 20 + r()*200 : 40 + r()*300);
+  const base = DEMO_BASE[key] ?? (key.startsWith('f:') || key.startsWith('e:') ? 0.05 + r()*0.4 : key.endsWith('.IS') ? 20 + r()*200 : 40 + r()*300);
   const n = 520, drift = (r() - 0.42) * (fx ? 0.0016 : 0.0014), vol = fx ? 0.004 : key === 'gold' ? 0.009 : 0.017;
   let p = base; const arr = [];
   for(let i = 0; i < n; i++){ arr.push(p); const z = (r() + r() + r() - 1.5) * 2; p = p / Math.exp(drift + vol*z); }
@@ -283,7 +316,8 @@ function termsFor(h){
   const s = String(h.sym||'').toUpperCase(), t = [];
   if(h.cls === 'FX') t.push(...({USD:['dolar','usd'], EUR:['euro','avro'], GBP:['sterlin','gbp']}[s] || [s.toLowerCase()]));
   else if(h.cls === 'GOLD') t.push('altın', 'gold', 'ons');
-  else if(h.cls === 'TRY') return [];
+  else if(h.cls === 'COM'){ String(COMS[s] ? COMS[s].kw : s).split(',').forEach(x => t.push(x.trim().toLocaleLowerCase('tr'))); }
+  else if(h.cls === 'TRY' || h.cls === 'BES') return [];
   else t.push(s.toLocaleLowerCase('tr'));
   String(h.kw||'').split(',').map(x => x.trim().toLocaleLowerCase('tr')).filter(Boolean).forEach(x => t.push(x));
   return t;
@@ -383,6 +417,15 @@ function priceOf(h){
 function advise(a){
   const o = a.o, out = [];
   if(a.h.cls === 'TRY') return ['Nakit: fırsatlar ve acil durumlar için tampon. Enflasyona karşı değer kaybettiğini unutma; para piyasası fonu gibi getirili seçeneklere bakabilirsin.'];
+  if(a.h.cls === 'BES'){
+    if(!o || o.insufficient) return ['Yeterli fiyat geçmişi yok (en az ~10 ay gerekir).'];
+    const w = a.weight || 0;
+    if(o.d === -1) out.push(w > 0.3 ? `Düşüş eğiliminde ve birikiminin %${pc(w)}'i bu fonda. Fon dağılımında bu fonun payını azaltmayı (fon değişikliği) değerlendirebilirsin.` : 'Düşüş eğiliminde; bu fonun payını artırmak için acele etme.');
+    else if(o.d === 1) out.push(o.R > 70 ? 'Trend yukarı ama kısa vadede ısınmış; yeni katkı payını bu fona yönlendirmek için acele etme.' : 'Trend destekliyor; mevcut payı korumak makul görünüyor.');
+    else out.push('Net bir yön sinyali yok; fon değişikliği gerektirmiyor.');
+    if(o.d !== 0 && o.conf.lvl <= 1) out.push('Not: bu sinyalin geçmiş isabeti zayıf. BES uzun vadeli bir birikim; yılda en fazla 12 fon değişikliği hakkın var, kısa vadeli sinyallerle sık değişiklik yapma.');
+    return out;
+  }
   if(!o || o.insufficient){ out.push('Yeterli fiyat geçmişi yok (en az ~10 ay gerekir); sadece portföy kuralları uygulanıyor.'); return out; }
   const w = a.weight || 0, pl = a.pl;
   if(o.d === -1){
@@ -402,11 +445,20 @@ function advise(a){
 function portfolioRules(tot){
   const R = [];
   if(!rows.length || !tot) return R;
+  if(isBes()){
+    rows.forEach(a => {
+      if(a.weight > 0.7) R.push({lvl:'info', title:`${dispName(a.h.cls, a.h.sym)}: birikimin çoğu tek fonda`, text:`Birikiminin %${pc(a.weight)}'i bu fonda. Emeklilik şirketinin farklı varlık sınıflarına yatırım yapan fonlarıyla dağılımı çeşitlendirmeyi düşünebilirsin.`});
+      if(a.o && a.o.d === -1 && a.weight > 0.2) R.push({lvl:'warn', title:`${dispName(a.h.cls, a.h.sym)}: düşüş eğiliminde`, text:`Birikiminin %${pc(a.weight)}'i ve teknik görünüm zayıf (sinyal güveni: ${a.o.conf.t.toLowerCase()}).`});
+    });
+    if(!R.some(r => r.lvl === 'warn')) R.unshift({lvl:'ok', title:'Belirgin bir risk uyarısı yok', text:'BES fonlarında kurallara göre belirgin bir sorun görünmüyor.'});
+    R.push({lvl:'info', title:'Hatırlatma', text:'BES uzun vadeli bir birikim. Fon dağılımını yılda en fazla 12 kez değiştirebilirsin; devlet katkısı fonları ayrı yönetilir.'});
+    return R;
+  }
   rows.forEach(a => {
     if(a.weight > 0.25 && a.h.cls !== 'TRY') R.push({lvl:'warn', title:`${a.h.sym}: tek varlıkta yoğunlaşma`, text:`Portföyün %${pc(a.weight)}'i bu varlıkta. Sert bir düşüş tüm portföyü etkiler; tek varlık için genelde %10-20 üstü riskli kabul edilir.`});
   });
-  const hedge = (byCls.FX||0) + (byCls.GOLD||0) + (byCls.US||0);
-  if(hedge < 0.2) R.push({lvl:'warn', title:'Kur ve enflasyon koruması zayıf', text:`Döviz, altın ve ABD varlıklarının toplam payı %${pc(hedge)}. TL'deki değer kaybına karşı koruman düşük.`});
+  const hedge = (byCls.FX||0) + (byCls.GOLD||0) + (byCls.US||0) + (byCls.COM||0);
+  if(hedge < 0.2) R.push({lvl:'warn', title:'Kur ve enflasyon koruması zayıf', text:`Döviz, altın, emtia ve ABD varlıklarının toplam payı %${pc(hedge)}. TL'deki değer kaybına karşı koruman düşük.`});
   if(hedge > 0.85) R.push({lvl:'info', title:'Neredeyse tamamen döviz/altın', text:`Payı %${pc(hedge)}. Kur sakin kalırsa veya TL reel getirisi yüksek olursa geride kalabilirsin.`});
   rows.forEach(a => {
     if(a.o && a.o.d === -1 && a.weight > 0.1) R.push({lvl:'warn', title:`${a.h.sym}: düşüş eğiliminde`, text:`Portföyün %${pc(a.weight)}'i ve teknik görünüm zayıf (sinyal güveni: ${a.o.conf.t.toLowerCase()}).`});
@@ -414,7 +466,7 @@ function portfolioRules(tot){
     if(a.pl != null && a.pl < -0.25) R.push({lvl:'info', title:`${a.h.sym}: büyük zarar`, text:`Maliyetine göre %${pc(-a.pl)} zararda. Pozisyonu tutma gerekçeni gözden geçir.`});
   });
   Object.keys(CLS).forEach(k => {
-    const t = (settings.targets[k] || 0)/100, cur = byCls[k] || 0, diff = cur - t;
+    const t = (pf.targets[k] || 0)/100, cur = byCls[k] || 0, diff = cur - t;
     if(Math.abs(diff) >= 0.05) R.push({lvl:'info', title:`${CLS[k].label}: hedefin ${diff > 0 ? 'üstünde' : 'altında'}`, text:`Şu an %${pc(cur)}, hedefin %${pc(t)}. Dengelemek için yaklaşık ${fmtTRY(Math.abs(diff)*tot)} ${diff > 0 ? 'azaltılabilir' : 'eklenebilir'}.`});
   });
   if(!R.some(r => r.lvl === 'warn')) R.unshift({lvl:'ok', title:'Belirgin bir risk uyarısı yok', text:'Dağılım ve pozisyonlar kurallara göre dengeli görünüyor.'});
@@ -424,7 +476,7 @@ function portfolioRules(tot){
 function computeAll(){
   const fx = usdtry();
   rows = holdings.map(h => {
-    const price = priceOf(h), mult = h.cls === 'US' ? fx : 1;
+    const price = priceOf(h), mult = curOfH(h.cls, h.sym) === 'USD' ? fx : 1;
     const valueTRY = (price != null && mult) ? price * h.qty * mult : null;
     const costTRY = (h.cost && mult) ? h.cost * h.qty * mult : null;
     const pl = (price != null && h.cost) ? price/h.cost - 1 : null;
@@ -478,6 +530,7 @@ async function refresh(){
   }));
   try{ await loadNews(); }catch(e){ errs.push('Haberler: ' + e.message); }
   lastUpdate = Date.now();
+  applyBesPlan();
   computeAll(); logSignals(); renderAll();
   busy = false; $('#refreshBtn').classList.remove('spin');
   setStatus((settings.workerUrl ? 'Güncellendi ' : 'Demo veri · ') + new Date().toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit'}) + (errs.length ? ` · ${errs.length} kaynak alınamadı` : ''));
@@ -492,12 +545,14 @@ function spark(closes, n=126){
   const col = c.at(-1) >= c[0] ? 'var(--up)' : 'var(--down)';
   return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg>`;
 }
-function donut(){
+const FUND_COLORS = ['#63b3ed', '#b892ff', '#4fd1c5', '#f6ad55', '#f0c419', '#e07a5f', '#9aa4b2', '#7aa7ff'];
+function donut(parts){
+  parts = parts || Object.keys(CLS).map(k => ({v:byCls[k] || 0, color:CLS[k].color}));
   const R = 46, C = 2*Math.PI*R; let off = 0, segs = '';
-  Object.keys(CLS).forEach(k => {
-    const v = byCls[k] || 0; if(v <= 0) return;
+  parts.forEach(({v, color}) => {
+    if(v <= 0) return;
     const len = Math.max(v*C - 2, 0.5);
-    segs += `<circle r="${R}" cx="60" cy="60" fill="none" stroke="${CLS[k].color}" stroke-width="16" stroke-dasharray="${len} ${C - len}" stroke-dashoffset="${-off}" transform="rotate(-90 60 60)"/>`;
+    segs += `<circle r="${R}" cx="60" cy="60" fill="none" stroke="${color}" stroke-width="16" stroke-dasharray="${len} ${C - len}" stroke-dashoffset="${-off}" transform="rotate(-90 60 60)"/>`;
     off += v*C;
   });
   return `<svg viewBox="0 0 120 120" aria-hidden="true"><circle r="${R}" cx="60" cy="60" fill="none" stroke="var(--card2)" stroke-width="16"/>${segs}</svg>`;
@@ -506,7 +561,38 @@ const pillCls = o => !o || o.insufficient ? 'flat' : o.d === 1 ? 'up' : o.d === 
 const pillTxt = o => !o ? '—' : o.insufficient ? 'Veri az' : o.d === 1 ? '▲ Yükseliş' : o.d === -1 ? '▼ Düşüş' : '■ Yatay';
 
 /* ================= Ekranlar ================= */
+function renderPfBar(){
+  $('#pfBar').innerHTML = portfolios.map(x => `<button class="chip ${x.id === pf.id ? 'on' : ''}" data-pf="${x.id}" style="white-space:nowrap">${x.kind === 'bes' ? '🏦 ' : ''}${esc(x.name)}</button>`).join('')
+    + `<button class="chip" data-act="pfEdit" style="white-space:nowrap">✎ Düzenle</button><button class="chip" data-act="pfNew" style="white-space:nowrap">+ Yeni portföy</button>`;
+}
+function switchPf(id){
+  const x = portfolios.find(p => p.id === id); if(!x || x.id === pf.id) return;
+  pf = x; holdings = pf.holdings; store.set('activePf', pf.id);
+  computeAll(); renderAll(); refresh();
+}
+function openPfForm(edit){
+  const x = edit ? pf : {name:'', kind:'bes', company:''};
+  openSheet(`<h3>${edit ? 'Portföyü düzenle' : 'Yeni portföy'}</h3>
+    <p class="muted small">Her portföyün varlıkları, değeri ve analizi ayrı tutulur. Örneğin her BES sözleşmeni ayrı bir portföy olarak açabilirsin.</p>
+    <label class="f">Portföy adı</label><input id="pName" placeholder="örn. BES – Anadolu Hayat" value="${esc(x.name)}">
+    <label class="f">Tür</label><div class="seg" id="pKind" style="grid-template-columns:1fr 1fr">
+      <button type="button" data-pkind="genel" class="${x.kind !== 'bes' ? 'on' : ''}">Genel yatırım</button>
+      <button type="button" data-pkind="bes" class="${x.kind === 'bes' ? 'on' : ''}">BES (emeklilik)</button></div>
+    <div id="pCompWrap" class="${x.kind === 'bes' ? '' : 'hidden'}"><label class="f">Emeklilik şirketi (isteğe bağlı)</label><input id="pComp" placeholder="örn. Anadolu Hayat Emeklilik" value="${esc(x.company || '')}"></div>
+    <button class="btn primary block" data-act="pfSave" data-edit="${edit ? 1 : 0}" style="margin-top:14px">Kaydet</button>
+    ${edit && portfolios.length > 1 ? '<button class="btn block danger" data-act="pfDel">Bu portföyü sil</button>' : ''}
+    <button class="btn block" data-act="close">Vazgeç</button>`);
+}
+function savePfForm(edit){
+  const name = $('#pName').value.trim(); if(!name) return toast('Portföye bir ad ver.');
+  const kind = document.querySelector('#pKind .on').dataset.pkind, company = $('#pComp').value.trim();
+  if(edit){ Object.assign(pf, {name, kind, company}); if(kind !== 'bes' && !Object.keys(pf.targets || {}).length) pf.targets = Object.assign({}, DEF_TARGETS); }
+  else { const x = {id:uid(), name, kind, company, holdings:[], targets:kind === 'bes' ? {} : Object.assign({}, DEF_TARGETS)}; portfolios.push(x); pf = x; holdings = pf.holdings; }
+  savePf(); closeSheet(); computeAll(); renderAll(); refresh(); switchTab('portfoy');
+  toast(edit ? 'Portföy güncellendi.' : `"${name}" oluşturuldu. Şimdi ${kind === 'bes' ? 'BES fonlarını' : 'varlıklarını'} ekleyebilirsin.`);
+}
 function renderAll(){
+  renderPfBar();
   const demo = !settings.workerUrl;
   const b = $('#demoBanner');
   b.classList.toggle('hidden', !demo);
@@ -519,37 +605,45 @@ function renderPortfolio(){
   if(!holdings.length){
     el.innerHTML = `<div class="card empty"><h2>Portföyünü ekleyerek başla</h2>
       <p class="muted">Hisse, fon, döviz, altın ve TL varlıklarını ekle. Pusula dağılımını, kâr-zararını, risklerini ve piyasa görünümünü analiz etsin.</p>
-      <button class="btn primary block" data-act="add">+ Varlık ekle</button>
-      <button class="btn block" data-act="demo">Örnek portföyle dene</button></div>`;
+      <button class="btn primary block" data-act="add">+ ${isBes() ? 'BES fonu ekle' : 'Varlık ekle'}</button>
+      ${isBes() ? '' : '<button class="btn block" data-act="demo">Örnek portföyle dene</button>'}</div>`;
     return;
   }
   const t = totals;
   let h = `<div class="card">
-    <div class="muted small">Toplam değer</div>
+    <div class="muted small">${esc(pf.name)}${isBes() ? (pf.company ? ' · ' + esc(pf.company) : '') + ' · toplam birikim' : ' · toplam değer'}</div>
     <div class="big">${fmtTRY(t.tot)}</div>
     <div class="kpis">
       <div><span class="muted tiny">Kâr / zarar</span><b class="${cls(t.pl)}">${t.plAbs != null ? (t.plAbs >= 0 ? '+' : '−') + fmtTRY(Math.abs(t.plAbs)) : '—'}</b></div>
       <div><span class="muted tiny">Getiri</span><b class="${cls(t.pl)}">${pct(t.pl)}</b></div>
       <div><span class="muted tiny">Dolar karşılığı</span><b>${t.usd != null ? '$' + fmtNum(t.usd, 0) : '—'}</b></div>
     </div>
-    <div class="muted tiny" style="margin-top:8px">ABD varlıklarının TL maliyeti bugünkü kurla hesaplanır; getirileri dolar bazındadır.</div>
+    ${isBes() ? '' : '<div class="muted tiny" style="margin-top:8px">ABD varlıklarının TL maliyeti bugünkü kurla hesaplanır; getirileri dolar bazındadır.</div>'}
   </div>`;
+  if(isBes()) h += contribCard();
+  if(isBes()){
+    const fr = [...rows].sort((a, b) => b.weight - a.weight).map((r, i) => ({r, color:FUND_COLORS[i % FUND_COLORS.length]}));
+    h += `<div class="card"><h2>Fon dağılımı</h2><div class="alloc">${donut(fr.map(x => ({v:x.r.weight, color:x.color})))}<div class="leg">`
+      + fr.map(x => `<div class="l"><span class="dot" style="background:${x.color}"></span><span class="grow ellip">${esc(x.r.h.sym)}${x.r.s && x.r.s.name && x.r.s.name !== x.r.h.sym ? ' <span class="muted tiny">' + esc(x.r.s.name) + '</span>' : ''}</span><b>%${pc(x.r.weight)}</b></div>`).join('')
+      + `</div></div></div>`;
+  } else {
   h += `<div class="card"><h2>Dağılım ve hedef</h2><div class="alloc">${donut()}<div class="leg">`;
   Object.keys(CLS).forEach(k => {
-    const v = byCls[k] || 0, tg = (settings.targets[k] || 0)/100; if(!v && !tg) return;
+    const v = byCls[k] || 0, tg = (pf.targets[k] || 0)/100; if(!v && !tg) return;
     h += `<div class="l"><span class="dot" style="background:${CLS[k].color}"></span><span class="grow ellip">${CLS[k].label}</span><b>%${pc(v)}</b><span class="muted tiny" style="width:52px;text-align:right">hedef %${pc(tg)}</span></div>
           <div class="bar"><span style="width:${Math.min(v*100, 100)}%;background:${CLS[k].color}"></span><em style="left:${Math.min(tg*100, 100)}%"></em></div>`;
   });
   h += `</div></div></div>`;
+  }
   h += `<div class="card"><h2>Yönlendirmeler</h2>${rules.map(r => `<div class="rule"><div class="ic ${r.lvl}">${r.lvl === 'warn' ? '!' : r.lvl === 'ok' ? '✓' : 'i'}</div><div><b>${esc(r.title)}</b><p>${esc(r.text)}</p></div></div>`).join('')}
-    <button class="btn block" data-act="claude">✦ Claude ile AL / SAT analizi</button></div>`;
+    <button class="btn block" data-act="claude">✦ ${isBes() ? 'Claude ile BES fon analizi' : 'Claude ile AL / SAT analizi'}</button></div>`;
   h += `<div class="card"><div class="row between" style="margin-bottom:8px"><h2 style="margin:0">Varlıklar</h2><button class="btn sm primary" data-act="add">+ Ekle</button></div><div class="list">`;
   [...rows].sort((a, b) => (b.valueTRY || 0) - (a.valueTRY || 0)).forEach(r => {
     const c = CLS[r.h.cls];
     h += `<div class="item" data-edit="${r.h.id}">
       <span class="dot" style="background:${c.color}"></span>
-      <div class="grow"><div class="row" style="gap:8px"><b class="ellip">${esc(String(r.h.sym).toUpperCase())}</b>${r.h.cls !== 'TRY' ? `<span class="pill ${pillCls(r.o)}">${pillTxt(r.o)}</span>` : ''}</div>
-        <div class="muted small ellip">${c.label} · ${fmtNum(r.h.qty, 4)} ${r.h.cls === 'TRY' ? 'TL' : r.h.cls === 'GOLD' ? 'gr' : 'adet'}${r.price != null && r.h.cls !== 'TRY' ? ' · ' + fmtPx(r.price) + (c.cur === 'USD' ? ' $' : ' ₺') : ''}${r.h.manualPrice ? ' (elle)' : ''}</div></div>
+      <div class="grow"><div class="row" style="gap:8px"><b class="ellip">${esc(dispName(r.h.cls, r.h.sym))}</b>${r.h.dk ? '<span class="tag">Devlet katkısı</span>' : ''}${r.h.cls !== 'TRY' ? `<span class="pill ${pillCls(r.o)}">${pillTxt(r.o)}</span>` : ''}</div>
+        <div class="muted small ellip">${c.label} · ${fmtNum(r.h.qty, 4)} ${r.h.cls === 'TRY' ? 'TL' : r.h.cls === 'GOLD' ? 'gr' : r.h.cls === 'COM' ? (COMS[r.h.sym] ? COMS[r.h.sym].unit : '') : r.h.cls === 'BES' || r.h.cls === 'FUND' ? 'pay' : 'adet'}${r.price != null && r.h.cls !== 'TRY' ? ' · ' + fmtPx(r.price) + curSym(r.h.cls, r.h.sym) : ''}${r.h.manualPrice ? ' (elle)' : ''}</div></div>
       <div class="right"><b>${fmtTRY(r.valueTRY)}</b><div class="small ${cls(r.pl)}">${r.pl != null ? pct(r.pl) : '%' + pc(r.weight)}</div></div></div>`;
   });
   h += `</div></div><p class="muted tiny" style="text-align:center;padding:0 10px">Pusula kişisel bilgilendirme aracıdır, yatırım danışmanlığı değildir. Kararlar ve sorumluluk sana aittir.</p>`;
@@ -601,9 +695,9 @@ function renderOutlook(){
   h += `<div class="sec">Portföyündeki varlıklar</div>`;
   if(!rs.length) h += `<div class="card muted">Portföyüne varlık eklediğinde burada her biri için görünüm ve öneri çıkacak.</div>`;
   rs.sort((a, b) => b.weight - a.weight).forEach(r => {
-    h += outlookCard(String(r.h.sym).toUpperCase(), `${CLS[r.h.cls].label} · portföyün %${pc(r.weight)}'i${r.pl != null ? ' · K/Z ' + pct(r.pl) : ''}`, r.o, r.s, r.advice, r.news);
+    h += outlookCard(dispName(r.h.cls, r.h.sym), `${CLS[r.h.cls].label} · portföyün %${pc(r.weight)}'i${r.pl != null ? ' · K/Z ' + pct(r.pl) : ''}`, r.o, r.s, r.advice, r.news);
   });
-  h += `<button class="btn block" data-act="claude">✦ Claude ile AL / SAT analizi</button>`;
+  h += `<button class="btn block" data-act="claude">✦ ${isBes() ? 'Claude ile BES fon analizi' : 'Claude ile AL / SAT analizi'}</button>`;
   el.innerHTML = h;
 }
 
@@ -658,15 +752,15 @@ function renderKarne(){
 
 function renderSettings(){
   const el = $('#tab-ayar');
-  const tsum = Object.values(settings.targets).reduce((a, b) => a + (+b || 0), 0);
+  const tsum = Object.values(pf.targets).reduce((a, b) => a + (+b || 0), 0);
   el.innerHTML = `<div class="card"><h2>Veri sunucusu</h2>
     <p class="muted small" style="margin-top:0">Gerçek fiyat ve haberler için kendi ücretsiz Cloudflare Worker adresini gir. Boş bırakırsan uygulama demo veriyle çalışır.</p>
     <input id="wUrl" type="url" inputmode="url" placeholder="https://pusula.kullaniciadin.workers.dev" value="${esc(settings.workerUrl)}">
     <div class="row" style="margin-top:8px"><button class="btn sm primary" data-act="saveUrl">Kaydet</button><button class="btn sm" data-act="testUrl">Bağlantıyı test et</button></div></div>
-  <div class="card"><h2>Hedef dağılım (%)</h2>
-    <div class="grid2">${Object.keys(CLS).map(k => `<label><span class="muted small">${CLS[k].label}</span><input type="number" inputmode="decimal" min="0" max="100" data-target="${k}" value="${settings.targets[k] ?? 0}"></label>`).join('')}</div>
+  ${isBes() ? '' : `<div class="card"><h2>Hedef dağılım (%) · ${esc(pf.name)}</h2>
+    <div class="grid2">${Object.keys(CLS).filter(k => k !== 'BES').map(k => `<label><span class="muted small">${CLS[k].label}</span><input type="number" inputmode="decimal" min="0" max="100" data-target="${k}" value="${pf.targets[k] ?? 0}"></label>`).join('')}</div>
     <div class="small ${tsum === 100 ? 'muted' : 'warn'}" style="margin-top:8px" id="tsum">Toplam: %${tsum}${tsum === 100 ? '' : ' (100 olmalı)'}</div>
-    <p class="muted tiny">Yönlendirmeler gerçek dağılımı bu hedeflerle karşılaştırır. Hedefi risk iştahına göre sen belirle.</p></div>
+    <p class="muted tiny">Yönlendirmeler gerçek dağılımı bu hedeflerle karşılaştırır. Hedefi risk iştahına göre sen belirle.</p></div>`}
   <div class="card"><h2>Fırsat tarayıcıya ekle</h2>
     <p class="muted small" style="margin-top:0">Tarayıcı zaten geniş bir listeye ve günün keşiflerine bakar. Takip etmek istediğin başka semboller varsa virgülle ekle.</p>
     <label class="f">Ek BIST hisseleri</label><input id="scBist" placeholder="örn. KLSER, ALTNY" value="${esc(settings.extraBist)}">
@@ -698,6 +792,7 @@ function scanUniverse(){
   list(US_UNI).forEach(s => items.push({cls:'US', sym:s}));
   ['USD', 'EUR', 'GBP'].forEach(s => items.push({cls:'FX', sym:s}));
   items.push({cls:'GOLD', sym:'GRAM'});
+  Object.keys(COMS).forEach(k => items.push({cls:'COM', sym:k}));
   const seen = new Set();
   return items.filter(it => { const k = keyFor(it); if(seen.has(k)) return false; seen.add(k); it.key = k; return true; });
 }
@@ -740,8 +835,8 @@ function rankScan(a, b){
   return (b.o.conf.lvl - a.o.conf.lvl) || (Math.abs(b.o.s) - Math.abs(a.o.s)) || ((b.o.edge || 0) - (a.o.edge || 0));
 }
 function scanItemHTML(r){
-  const o = r.o, c = CLS[r.cls], cur = c.cur === 'USD' ? ' $' : ' ₺';
-  const name = r.cls === 'GOLD' ? 'Gram Altın' : r.cls === 'FX' ? r.sym + '/TRY' : r.sym;
+  const o = r.o, c = CLS[r.cls], cur = curSym(r.cls, r.sym);
+  const name = dispName(r.cls, r.sym);
   let tip;
   if(o.d === 1){
     tip = o.R > 70 ? `Trend yukarı ama RSI ${o.R.toFixed(0)} ile ısınmış. İncelemek istersen tek seferde değil, geri çekilmelerde kademeli almak daha temkinli olur.`
@@ -790,12 +885,16 @@ let formCls = 'BIST';
 function openSheet(html){ $('#sheetCard').innerHTML = '<div class="grab"></div>' + html; $('#sheet').classList.remove('hidden'); }
 function closeSheet(){ $('#sheet').classList.add('hidden'); }
 function openForm(id, pre){
-  const h = holdings.find(x => x.id === id) || Object.assign({cls:'BIST', sym:'', qty:'', cost:''}, pre || {});
+  const h = holdings.find(x => x.id === id) || Object.assign({cls:isBes() ? 'BES' : 'BIST', sym:'', qty:'', cost:''}, pre || {});
   formCls = h.cls;
   openSheet(`<h3>${id ? 'Varlığı düzenle' : 'Varlık ekle'}</h3>
     <label class="f">Tür</label>
-    <div class="seg" id="segCls">${Object.keys(CLS).map(k => `<button type="button" data-cls="${k}" class="${k === formCls ? 'on' : ''}">${CLS[k].label.replace(' Hisse/ETF', ' Hisse').replace('TL Nakit/Mevduat', 'TL Nakit')}</button>`).join('')}</div>
+    <div class="seg" id="segCls">${Object.keys(CLS).filter(k => isBes() ? k === 'BES' : k !== 'BES').map(k => `<button type="button" data-cls="${k}" class="${k === formCls ? 'on' : ''}">${CLS[k].label.replace(' Hisse/ETF', ' Hisse').replace('TL Nakit/Mevduat', 'TL Nakit')}</button>`).join('')}</div>
     <div id="symWrap"><label class="f">Sembol</label><input id="fSym" autocapitalize="characters" autocomplete="off" value="${esc(h.sym)}"></div>
+    <div id="comWrap"><label class="f">Emtia</label><select id="fCom">${Object.keys(COMS).map(k => `<option value="${k}" ${h.sym === k ? 'selected' : ''}>${COMS[k].name} (${COMS[k].gram ? 'TL/gram' : 'USD/' + COMS[k].unit})</option>`).join('')}</select></div>
+    <div id="besMode" class="hidden"><label class="f">Miktarı nasıl gireceksin?</label><div class="seg" style="grid-template-columns:1fr 1fr">
+      <button type="button" data-qmode="amt" class="${id ? '' : 'on'}">Güncel tutar (TL)</button><button type="button" data-qmode="qty" class="${id ? 'on' : ''}">Pay adedi</button></div>
+      <label class="row small" style="margin-top:10px;gap:8px"><input type="checkbox" id="fDk" style="width:auto" ${h.dk ? 'checked' : ''}> Devlet katkısı fonu</label></div>
     <label class="f" id="qtyLbl">Miktar</label><input id="fQty" type="number" inputmode="decimal" step="any" value="${esc(h.qty)}">
     <div id="costWrap"><label class="f" id="costLbl">Birim maliyet</label><input id="fCost" type="number" inputmode="decimal" step="any" value="${esc(h.cost)}"></div>
     <details><summary>Gelişmiş ▾</summary>
@@ -810,32 +909,159 @@ function openForm(id, pre){
 function updateForm(){
   document.querySelectorAll('#segCls button').forEach(b => b.classList.toggle('on', b.dataset.cls === formCls));
   const c = CLS[formCls];
-  $('#symWrap').classList.toggle('hidden', formCls === 'GOLD' || formCls === 'TRY');
+  $('#symWrap').classList.toggle('hidden', formCls === 'GOLD' || formCls === 'TRY' || formCls === 'COM');
+  $('#comWrap').classList.toggle('hidden', formCls !== 'COM');
+  const cm = COMS[$('#fCom').value];
   $('#costWrap').classList.toggle('hidden', formCls === 'TRY');
+  $('#besMode').classList.toggle('hidden', formCls !== 'BES');
+  const amt = formCls === 'BES' && document.querySelector('[data-qmode="amt"]').classList.contains('on');
   $('#fSym').placeholder = c.hint;
-  $('#qtyLbl').textContent = formCls === 'TRY' ? 'Tutar (TL)' : formCls === 'GOLD' ? 'Miktar (gram)' : formCls === 'FX' ? 'Miktar (döviz)' : formCls === 'FUND' ? 'Pay adedi' : 'Adet';
-  $('#costLbl').textContent = formCls === 'US' ? 'Birim alış maliyeti (USD)' : formCls === 'GOLD' ? 'Gram başı alış maliyeti (TL)' : 'Birim alış maliyeti (TL)';
+  $('#qtyLbl').textContent = formCls === 'BES' ? (amt ? 'Fondaki güncel birikim (TL)' : 'Pay adedi') : formCls === 'COM' ? `Miktar (${cm.unit})` : formCls === 'TRY' ? 'Tutar (TL)' : formCls === 'GOLD' ? 'Miktar (gram)' : formCls === 'FX' ? 'Miktar (döviz)' : formCls === 'FUND' ? 'Pay adedi' : 'Adet';
+  $('#costLbl').textContent = formCls === 'BES' ? 'Birim pay maliyeti (TL, isteğe bağlı)' : formCls === 'COM' ? (cm.gram ? 'Gram başı alış maliyeti (TL)' : `Birim alış maliyeti (USD/${cm.unit})`) : formCls === 'US' ? 'Birim alış maliyeti (USD)' : formCls === 'GOLD' ? 'Gram başı alış maliyeti (TL)' : 'Birim alış maliyeti (TL)';
 }
-function saveHolding(id){
-  const sym = formCls === 'GOLD' ? 'GRAM' : formCls === 'TRY' ? 'TL' : $('#fSym').value.trim().toUpperCase().replace(/\s+/g, '');
+async function saveHolding(id){
+  const sym = formCls === 'COM' ? $('#fCom').value : formCls === 'GOLD' ? 'GRAM' : formCls === 'TRY' ? 'TL' : $('#fSym').value.trim().toUpperCase().replace(/\s+/g, '');
   const qty = parseFloat(String($('#fQty').value).replace(',', '.'));
   const cost = formCls === 'TRY' ? 1 : parseFloat(String($('#fCost').value).replace(',', '.'));
   const man = parseFloat(String($('#fMan').value).replace(',', '.'));
   if(!sym || !/^[A-Z0-9.\-]{1,15}$/.test(sym)) return toast('Geçerli bir sembol gir.');
   if(!(qty > 0)) return toast('Miktar sıfırdan büyük olmalı.');
   if(formCls === 'FX' && !/^[A-Z]{3}$/.test(sym)) return toast('Döviz için 3 harfli kod gir (USD, EUR, GBP).');
-  const rec = {id:id || uid(), cls:formCls, sym, qty, cost:cost > 0 ? cost : null, kw:$('#fKw').value.trim(), manualPrice:man > 0 ? man : null};
+  let q = qty;
+  if(formCls === 'BES' && document.querySelector('[data-qmode="amt"]').classList.contains('on')){
+    // Tutar girildiyse güncel pay fiyatıyla pay adedine çevir
+    let px = man > 0 ? man : null;
+    if(!px){ try{ toast('Fon fiyatı alınıyor…'); const d = await loadKey('e:' + sym); series['e:' + sym] = d; px = d.price ?? d.closes.at(-1)[1]; }catch(e){ return toast('Fon fiyatı alınamadı: ' + e.message + ". Pay adedini gir ya da Gelişmiş'ten elle fiyat yaz.", 5000); } }
+    q = qty / px;
+  }
+  const rec = {id:id || uid(), cls:formCls, sym, qty:q, cost:cost > 0 ? cost : null, kw:$('#fKw').value.trim(), manualPrice:man > 0 ? man : null, ...(formCls === 'BES' ? {dk:$('#fDk').checked} : {})};
   if(id) holdings = holdings.map(x => x.id === id ? rec : x); else holdings.push(rec);
-  store.set('holdings', holdings); closeSheet();
+  savePf(); closeSheet();
   computeAll(); renderAll(); refresh();
+}
+
+/* ================= BES aylık katkı ================= */
+const ym = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+function priceAtDate(key, t){
+  const s = series[key]; if(!s || !s.closes) return null;
+  for(const [ts, v] of s.closes) if(ts >= t) return v;
+  return Date.now() >= t ? (s.price ?? s.closes.at(-1)?.[1] ?? null) : null;
+}
+// Katkıyı fonlara böler, o tarihteki fiyatla pay adedine çevirir, ortalama maliyeti günceller
+function addContribution(amount, split, t, auto, dkPct){
+  const parts = Object.entries(split).filter(([, v]) => v > 0);
+  const tot = parts.reduce((a, [, v]) => a + v, 0); if(!tot) return false;
+  const buys = [];
+  for(const [id, w] of parts){
+    const h = holdings.find(x => x.id === id); if(!h) continue;
+    const px = h.manualPrice ? +h.manualPrice : priceAtDate(keyFor(h), t);
+    if(!px) return false; // fiyat yoksa bu katkıyı sonra tekrar dene
+    buys.push([h, amount * w / tot, px]);
+  }
+  if(dkPct > 0 && pf.plan && pf.plan.dkFund){
+    const h = holdings.find(x => x.id === pf.plan.dkFund);
+    const px = h ? (h.manualPrice ? +h.manualPrice : priceAtDate(keyFor(h), t)) : null;
+    if(h && !px) return false;
+    if(h) buys.push([h, amount * dkPct / 100, px, true]);
+  }
+  buys.forEach(([h, amt, px]) => {
+    const add = amt / px;
+    if(h.cost) h.cost = (h.cost * h.qty + amt) / (h.qty + add);
+    h.qty += add;
+  });
+  pf.contribs = pf.contribs || [];
+  pf.contribs.push({t, amount, dk:dkPct > 0 ? amount * dkPct / 100 : 0, auto:!!auto});
+  return true;
+}
+function applyBesPlan(){
+  const P = pf.plan; if(!isBes() || !P || !P.amount) return;
+  const now = new Date(); let applied = 0;
+  let [y, m] = P.last.split('-').map(Number);
+  for(let i = 0; i < 36; i++){
+    m++; if(m > 12){ m = 1; y++; }
+    const day = Math.min(P.day, new Date(y, m, 0).getDate());
+    const due = new Date(y, m - 1, day, 12);
+    if(due > now) break;
+    if(!addContribution(P.amount, P.split, due.getTime(), true, P.dkPct || 0)) break;
+    P.last = ym(due); applied++;
+  }
+  if(applied){ savePf(); toast(`${applied} aylık katkı eklendi (₺${fmtNum(P.amount * applied, 0)}). Pay adetleri güncellendi.`, 4000); }
+}
+function contribCard(){
+  const P = pf.plan, paid = (pf.contribs || []).reduce((a, c) => a + c.amount, 0), dk = (pf.contribs || []).reduce((a, c) => a + (c.dk || 0), 0);
+  const name = id => { const h = holdings.find(x => x.id === id); return h ? h.sym : '?'; };
+  let h = `<div class="card"><h2>Aylık katkı</h2>`;
+  if(P && P.amount){
+    h += `<div class="row between"><div><b style="font-size:17px">${fmtTRY(P.amount)}</b> <span class="muted small">her ay, ayın ${P.day}. günü</span></div><button class="btn sm" data-act="planEdit">Düzenle</button></div>
+      <div class="muted small" style="margin-top:4px">${Object.entries(P.split).filter(([, v]) => v > 0).map(([id, v]) => `${esc(name(id))} %${v}`).join(' · ')}${P.dkPct > 0 && P.dkFund ? ` · devlet katkısı %${P.dkPct} → ${esc(name(P.dkFund))}` : ''}</div>`;
+  } else {
+    h += `<p class="muted small" style="margin-top:0">Her ay düzenli ödeme yapıyorsan bir kez tanımla; uygulama her ay ödeme gününün fon fiyatıyla pay adetlerini otomatik artırsın.</p>
+      <button class="btn primary block" data-act="planEdit">Aylık katkı tanımla</button>`;
+  }
+  if(paid) h += `<div class="kpis" style="grid-template-columns:1fr 1fr"><div><span class="muted tiny">Uygulamada eklenen katkılar</span><b>${fmtTRY(paid)}</b></div><div><span class="muted tiny">Bunun devlet katkısı</span><b>${fmtTRY(dk)}</b></div></div>`;
+  h += `<button class="btn block" data-act="oneOff">+ Tek seferlik katkı ekle</button></div>`;
+  return h;
+}
+function splitInputs(cur){
+  const funds = holdings.filter(x => x.cls === 'BES' && !x.dk);
+  if(!funds.length) return '<p class="warn small">Önce bu portföye en az bir BES fonu ekle.</p>';
+  const even = Math.floor(100 / funds.length);
+  return `<label class="f">Ödemenin fonlara dağılımı (%)</label><div class="grid2">${funds.map((x, i) => `<label><span class="muted small">${esc(x.sym)}</span><input type="number" inputmode="decimal" min="0" max="100" data-split="${x.id}" value="${cur ? (cur[x.id] ?? 0) : (i === 0 ? 100 - even * (funds.length - 1) : even)}"></label>`).join('')}</div>`;
+}
+function readSplit(){
+  const out = {}; let t = 0;
+  document.querySelectorAll('[data-split]').forEach(i => { const v = Math.max(0, +i.value || 0); out[i.dataset.split] = v; t += v; });
+  return t > 0 ? out : null;
+}
+function openPlanForm(){
+  const P = pf.plan || {amount:'', day:1, split:null, dkPct:0, dkFund:''};
+  const dkFunds = holdings.filter(x => x.cls === 'BES' && x.dk);
+  openSheet(`<h3>Aylık katkı planı</h3>
+    <p class="muted small">Plan, kaydettiğin andan sonraki ödemeleri ekler. Bugüne kadarki birikimin fonlara girdiğin tutarlarda zaten var.</p>
+    <label class="f">Aylık ödeme tutarı (TL)</label><input id="plAmt" type="number" inputmode="decimal" value="${esc(P.amount)}">
+    <label class="f">Ödeme günü (ayın kaçı)</label><input id="plDay" type="number" inputmode="numeric" min="1" max="31" value="${esc(P.day)}">
+    ${splitInputs(P.split)}
+    ${dkFunds.length ? `<details ${P.dkPct ? 'open' : ''}><summary>Devlet katkısı ▾</summary>
+      <label class="f">Devlet katkısı oranı (%)</label><input id="plDk" type="number" inputmode="decimal" placeholder="Güncel oranı kontrol et" value="${P.dkPct || ''}">
+      <label class="f">Devlet katkısının yatırıldığı fon</label><select id="plDkF">${dkFunds.map(x => `<option value="${x.id}" ${P.dkFund === x.id ? 'selected' : ''}>${esc(x.sym)}</option>`).join('')}</select>
+      <p class="muted tiny">Devlet katkısı hesaba genelde ödemeden bir süre sonra yatar; uygulama basitlik için ödeme günü ekler. Oran yasayla değişebilir, e-Devlet veya şirketinin uygulamasından kontrol et.</p></details>` : '<p class="muted tiny">Devlet katkısını da izlemek istersen, devlet katkısı fonunu "Devlet katkısı fonu" işaretiyle portföye ekle.</p>'}
+    <button class="btn primary block" data-act="planSave" style="margin-top:14px">Kaydet</button>
+    ${pf.plan ? '<button class="btn block danger" data-act="planDel">Planı kaldır</button>' : ''}
+    <button class="btn block" data-act="close">Vazgeç</button>`);
+}
+function savePlan(){
+  const amount = parseFloat(String($('#plAmt').value).replace(',', '.')), day = Math.min(31, Math.max(1, parseInt($('#plDay').value) || 1));
+  const split = readSplit();
+  if(!(amount > 0)) return toast('Aylık tutarı gir.');
+  if(!split) return toast('Fon dağılımını gir (toplamı 0 olamaz).');
+  const now = new Date();
+  // Bu ayın ödeme günü geçtiyse o ödeme zaten birikimde sayılır; plan bir sonraki aydan başlar
+  const last = pf.plan && pf.plan.last ? pf.plan.last : (now.getDate() >= day ? ym(now) : ym(new Date(now.getFullYear(), now.getMonth() - 1, 1)));
+  pf.plan = {amount, day, split, last, dkPct:$('#plDk') ? (+$('#plDk').value || 0) : 0, dkFund:$('#plDkF') ? $('#plDkF').value : ''};
+  savePf(); closeSheet(); renderPortfolio();
+  toast(`Plan kaydedildi. İlk otomatik katkı: ${(() => { const [y, m] = last.split('-').map(Number); const d = new Date(y, m, Math.min(day, new Date(y, m + 1, 0).getDate())); return d.toLocaleDateString('tr-TR'); })()}`, 4000);
+}
+function openOneOffForm(){
+  openSheet(`<h3>Tek seferlik katkı</h3>
+    <p class="muted small">Ek ödeme yaptıysan buradan ekle. Pay adetleri bugünkü fon fiyatıyla artırılır.</p>
+    <label class="f">Tutar (TL)</label><input id="ooAmt" type="number" inputmode="decimal">
+    ${splitInputs(pf.plan && pf.plan.split)}
+    <button class="btn primary block" data-act="oneOffSave" style="margin-top:14px">Ekle</button>
+    <button class="btn block" data-act="close">Vazgeç</button>`);
+}
+function saveOneOff(){
+  const amount = parseFloat(String($('#ooAmt').value).replace(',', '.')), split = readSplit();
+  if(!(amount > 0)) return toast('Tutarı gir.');
+  if(!split) return toast('Fon dağılımını gir.');
+  if(!addContribution(amount, split, Date.now(), false, 0)) return toast('Fon fiyatı henüz alınamadı. Biraz sonra tekrar dene ya da fona elle fiyat gir.', 4500);
+  savePf(); closeSheet(); computeAll(); renderAll(); toast(`${fmtTRY(amount)} katkı eklendi.`);
 }
 
 /* ================= Claude'a sor ================= */
 function buildPrompt(){
   const demo = !settings.workerUrl;
   const now = new Date();
-  const curOf = cl => CLS[cl].cur === 'USD' ? '$' : '₺';
-  const nameOf = (cl, sym) => cl === 'GOLD' ? 'Gram Altın' : cl === 'FX' ? sym + '/TRY' : sym;
+  const nameOf = dispName;
   const tech = (o, cur) => {
     if(!o || o.insufficient) return 'teknik veri yetersiz';
     let s = `fiyat ${fmtPx(o.p)}${cur}, SMA50 ${fmtPx(o.s50)}, SMA200 ${fmtPx(o.s200)}, RSI14 ${o.R.toFixed(0)}, getiri 1a ${pct(o.r1)} / 3a ${pct(o.r3)} / 6a ${pct(o.r6)}, Pusula puanı ${o.s > 0 ? '+' : ''}${o.s}/6 (${o.label})`;
@@ -843,6 +1069,7 @@ function buildPrompt(){
     if(o.hit != null) s += `, bu sinyalin 2 yıllık geçmiş isabeti %${pc(o.hit)} (taban %${pc(o.d === 1 ? o.bt.baseUp : 1 - o.bt.baseUp)})`;
     return s;
   };
+  if(isBes()) return buildBesPrompt(tech);
   let t = `Sen deneyimli bir portföy yöneticisi ve piyasa analistisin. Benim için kapsamlı bir piyasa ve portföy analizi yap ve net AL / SAT / TUT kararları ver.
 
 Tarih: ${now.toLocaleString('tr-TR')} (Türkiye saati).${demo ? '\nUYARI: Aşağıdaki fiyatlar uygulamanın DEMO verisidir, gerçek değildir. Güncel fiyatları web\'den kendin kontrol et.' : ' Aşağıdaki fiyatlar ücretsiz kaynaklardan ~15 dk gecikmeli alınmıştır.'}
@@ -855,12 +1082,12 @@ Tarih: ${now.toLocaleString('tr-TR')} (Türkiye saati).${demo ? '\nUYARI: Aşağ
 ## Portföyüm (toplam ${fmtTRY(totals.tot)}, maliyete göre getiri ${pct(totals.pl)})
 `;
   rows.forEach(r => {
-    const c = curOf(r.h.cls);
+    const c = curSym(r.h.cls, r.h.sym).trim();
     t += `- ${nameOf(r.h.cls, String(r.h.sym).toUpperCase())} [${CLS[r.h.cls].label}] — miktar ${fmtNum(r.h.qty, 4)}, birim maliyet ${r.h.cost ? fmtPx(r.h.cost) + c : '-'}, ağırlık %${pc(r.weight)}, K/Z ${pct(r.pl)}`;
     if(r.h.cls !== 'TRY') t += `\n  Teknik: ${tech(r.o, c)}`;
     t += '\n';
   });
-  t += `\nHedef dağılımım: ${Object.keys(CLS).map(k => CLS[k].label + ' %' + (settings.targets[k] || 0)).join(', ')}
+  t += `\nHedef dağılımım: ${Object.keys(CLS).map(k => CLS[k].label + ' %' + (pf.targets[k] || 0)).join(', ')}
 Şu anki dağılım: ${Object.keys(CLS).map(k => CLS[k].label + ' %' + pc(byCls[k] || 0)).join(', ')}
 
 ## Piyasa geneli
@@ -877,7 +1104,7 @@ Tarih: ${now.toLocaleString('tr-TR')} (Türkiye saati).${demo ? '\nUYARI: Aşağ
   strong.forEach(r => cand.push([r, 'güçlü trend']));
   if(cand.length){
     t += `\n## Portföyümde olmayan aday varlıklar (Pusula tarayıcısı, ${scanRes.length} varlık tarandı)\n`;
-    cand.forEach(([r, why]) => t += `- ${nameOf(r.cls, r.sym)} [${CLS[r.cls].label}] (${why}${r.src ? ', kaynak: ' + r.src : ''}): ${tech(r.o, curOf(r.cls))}\n`);
+    cand.forEach(([r, why]) => t += `- ${nameOf(r.cls, r.sym)} [${CLS[r.cls].label}] (${why}${r.src ? ', kaynak: ' + r.src : ''}): ${tech(r.o, curSym(r.cls, r.sym).trim())}\n`);
   } else {
     t += `\n## Aday varlıklar\nUygulamada henüz fırsat taraması yapılmadı. Sen BIST, ABD hisse/ETF, döviz, altın ve TEFAS fonları arasından güncel koşullarda öne çıkan 5-8 adayı kendin araştırıp öner.\n`;
   }
@@ -897,13 +1124,46 @@ Kurallar: Net ol, "duruma göre değişir" diye kaçma; her karara bir güven se
 `;
   return t;
 }
+function buildBesPrompt(tech){
+  const now = new Date();
+  let t = `Sen Türkiye'deki bireysel emeklilik sistemini (BES) iyi bilen, temkinli bir emeklilik fonu danışmanısın. Aşağıdaki BES portföyümü değerlendir ve fon dağılımım için net öneriler ver.
+
+Tarih: ${now.toLocaleString('tr-TR')} (Türkiye saati).${!settings.workerUrl ? "\nUYARI: Aşağıdaki fiyatlar uygulamanın DEMO verisidir, gerçek değildir. Fonların güncel verilerini TEFAS'tan kendin kontrol et." : ''}
+Portföy: ${pf.name}${pf.company ? ' — Emeklilik şirketi: ' + pf.company : ''}
+Toplam birikim (uygulamaya girdiğim fonlar): ${fmtTRY(totals.tot)}${pf.plan && pf.plan.amount ? `\nDüzenli katkı: her ay ${fmtTRY(pf.plan.amount)} ödüyorum. Yeni katkıların fon dağılımı için de öneri ver.` : ''}
+
+## Çalışma şekli
+1. ÖNCE web'de araştır: güncel makro ortam (TCMB faiz patikası, enflasyon beklentisi, USD/TRY, altın, BIST, küresel piyasalar) ve bunun BES fon türlerine (para piyasası, borçlanma araçları, hisse, altın, dış piyasa, katılım, karma/değişken) etkisi.
+2. Her fonun TEFAS'taki bilgilerini kontrol et: fon türü ve varlık dağılımı, 1-3-6-12 aylık getirisi, fon toplam gider kesintisi, büyüklüğü ve kategorisindeki diğer fonlara göre performansı.
+3. ${pf.company ? pf.company + ' şirketinin' : 'Emeklilik şirketimin'} sunduğu diğer fonları da araştır; fon değişikliği ancak aynı şirketin fonları arasında yapılabilir.
+
+## Fonlarım
+`;
+  rows.forEach(r => {
+    t += `- ${r.h.sym}${r.h.dk ? ' (DEVLET KATKISI fonu)' : ''}${r.s && r.s.name && r.s.name !== r.h.sym ? ' — ' + r.s.name : ''}: birikimdeki payı %${pc(r.weight)}, tutar ${fmtTRY(r.valueTRY)}${r.pl != null ? ', maliyete göre ' + pct(r.pl) : ''}\n  Teknik: ${tech(r.o, '₺')}\n`;
+  });
+  t += `\n## Piyasa geneli\n`;
+  market.forEach(m => t += `- ${m.name}: ${tech(m.o, '')}\n`);
+  t += `
+## Yanıt biçimi (Türkçe)
+1. **Ortam özeti** (4-6 madde): Önümüzdeki 6-12 ayda BES fon türlerini etkileyecek ana gelişmeler; kaynaklarıyla.
+2. **Fon karar tablosu**: Her fonum için bir satır. Sütunlar: Fon | Fon türü | Karar (ARTIR / KORU / AZALT / ÇIK) | Güven (düşük/orta/yüksek) | Önerilen yeni pay (%) | Tek cümle gerekçe.
+3. **Önerilen yeni dağılım**: Toplamı %100 olan hedef fon dağılımı. Gerekirse şirketin portföyümde olmayan fonlarından öneriler ekle (fon kodu ve adıyla).
+4. **Devlet katkısı**: Devlet katkısı fonları için ayrı değerlendirme (bunlar ayrı yönetilir; kısıtlarını belirt).
+5. **Uygulama notları**: Fon değişikliğini ne zaman ve kaç adımda yapmalıyım; yılda 12 değişiklik hakkını nasıl kullanmalıyım.
+6. **Riskler**: Önerinin bozulacağı senaryolar.
+
+Kurallar: BES uzun vadeli bir birikim; kısa vadeli dalgalanmalar için sık değişiklik önerme. Net ol ve her karara güven seviyesi ver. Rakamları uydurma; bulamadığın veriyi "bulunamadı" diye belirt.
+`;
+  return t;
+}
 async function copyText(s){
   try{ await navigator.clipboard.writeText(s); return true; }
   catch(e){ const ta = document.createElement('textarea'); ta.value = s; document.body.appendChild(ta); ta.select(); let ok = false; try{ ok = document.execCommand('copy'); }catch(_){} ta.remove(); return ok; }
 }
 async function askClaude(){
   const p = buildPrompt(); const ok = await copyText(p);
-  openSheet(`<h3>Claude ile AL / SAT analizi</h3>
+  openSheet(`<h3>${isBes() ? 'Claude ile BES fon analizi' : 'Claude ile AL / SAT analizi'}</h3>
     <ol class="small" style="padding-left:20px;margin:6px 0 10px;color:var(--muted)">
       <li>${ok ? '<b style="color:var(--up)">Analiz talimatı panoya kopyalandı.</b>' : 'Aşağıdaki metnin tamamını kopyala.'}</li>
       <li>Aşağıdaki düğmeyle claude.ai'yi aç ve yeni sohbet başlat.</li>
@@ -928,7 +1188,7 @@ function loadDemo(){
     {id:uid(), cls:'GOLD', sym:'GRAM', qty:40, cost:4300, kw:''},
     {id:uid(), cls:'TRY', sym:'TL', qty:40000, cost:1, kw:''}
   ];
-  store.set('holdings', holdings); computeAll(); renderAll(); refresh(); switchTab('portfoy');
+  savePf(); computeAll(); renderAll(); refresh(); switchTab('portfoy');
   toast('Örnek portföy yüklendi. Düzenlemek için bir varlığa dokun.');
 }
 let pendingConfirm = 0;
@@ -937,7 +1197,7 @@ function confirmInline(){ // iki kez dokunma ile onay (tarayıcı diyaloğu kull
   pendingConfirm = Date.now(); toast('Mevcut verilerin üzerine yazılacak. Onaylamak için tekrar dokun.'); return false;
 }
 function exportData(){
-  const data = JSON.stringify({app:'pusula', v:1, exported:new Date().toISOString(), holdings, settings, log:signalLog}, null, 2);
+  const data = JSON.stringify({app:'pusula', v:2, exported:new Date().toISOString(), portfolios, settings, log:signalLog}, null, 2);
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([data], {type:'application/json'}));
   a.download = 'pusula-yedek-' + today() + '.json'; document.body.appendChild(a); a.click(); a.remove();
   toast('Yedek indirildi.');
@@ -947,11 +1207,15 @@ function importData(file){
   r.onload = () => {
     try{
       const j = JSON.parse(r.result);
-      if(j.app !== 'pusula' || !Array.isArray(j.holdings)) throw new Error();
-      holdings = j.holdings.filter(h => h && CLS[h.cls] && h.qty > 0).map(h => ({...h, id:h.id || uid()}));
-      if(j.settings) settings = Object.assign(settings, {targets:j.settings.targets || settings.targets, workerUrl:j.settings.workerUrl ?? settings.workerUrl});
+      if(j.app !== 'pusula') throw new Error();
+      const clean = list => (list || []).filter(h => h && CLS[h.cls] && h.qty > 0).map(h => ({...h, id:h.id || uid()}));
+      if(Array.isArray(j.portfolios) && j.portfolios.length) portfolios = j.portfolios.map(x => ({id:x.id || uid(), name:x.name || 'Portföy', kind:x.kind === 'bes' ? 'bes' : 'genel', company:x.company || '', holdings:clean(x.holdings), targets:x.targets || {}}));
+      else if(Array.isArray(j.holdings)) portfolios = [{id:'main', name:'Ana Portföy', kind:'genel', holdings:clean(j.holdings), targets:Object.assign({}, DEF_TARGETS, (j.settings && j.settings.targets) || {})}];
+      else throw new Error();
+      pf = portfolios[0]; holdings = pf.holdings;
+      if(j.settings && j.settings.workerUrl != null) settings.workerUrl = j.settings.workerUrl;
       if(Array.isArray(j.log)) signalLog = j.log;
-      store.set('holdings', holdings); store.set('settings', settings); store.set('log', signalLog);
+      savePf(); store.set('settings', settings); store.set('log', signalLog);
       toast('Yedek geri yüklendi.'); refresh();
     }catch(e){ toast('Dosya okunamadı. Pusula yedeği olduğundan emin ol.'); }
   };
@@ -980,6 +1244,9 @@ document.addEventListener('click', e => {
   const ed = e.target.closest('[data-edit]'); if(ed){ openForm(ed.dataset.edit); return; }
   const cb = e.target.closest('[data-cls]'); if(cb){ formCls = cb.dataset.cls; updateForm(); return; }
   const nfb = e.target.closest('[data-nf]'); if(nfb){ newsFilter = nfb.dataset.nf; renderNews(); return; }
+  const pfb = e.target.closest('[data-pf]'); if(pfb){ switchPf(pfb.dataset.pf); return; }
+  const pkb = e.target.closest('[data-pkind]'); if(pkb){ document.querySelectorAll('#pKind button').forEach(b => b.classList.toggle('on', b === pkb)); $('#pCompWrap').classList.toggle('hidden', pkb.dataset.pkind !== 'bes'); return; }
+  const qmb = e.target.closest('[data-qmode]'); if(qmb){ document.querySelectorAll('[data-qmode]').forEach(b => b.classList.toggle('on', b === qmb)); updateForm(); return; }
   const sfb = e.target.closest('[data-sf]'); if(sfb){ scanFilter = sfb.dataset.sf; renderScan(); return; }
   const ab = e.target.closest('[data-add-cls]'); if(ab){ openForm(null, {cls:ab.dataset.addCls, sym:ab.dataset.addSym}); return; }
   const a = e.target.closest('[data-act]'); if(!a) return;
@@ -987,10 +1254,19 @@ document.addEventListener('click', e => {
   if(act === 'add') openForm(null);
   else if(act === 'close') closeSheet();
   else if(act === 'saveH') saveHolding(a.dataset.id || null);
-  else if(act === 'delH'){ if(confirmInline()){ holdings = holdings.filter(x => x.id !== a.dataset.id); store.set('holdings', holdings); closeSheet(); computeAll(); renderAll(); } }
+  else if(act === 'delH'){ if(confirmInline()){ holdings = holdings.filter(x => x.id !== a.dataset.id); savePf(); closeSheet(); computeAll(); renderAll(); } }
   else if(act === 'demo') loadDemo();
   else if(act === 'claude') askClaude();
   else if(act === 'scan') runScan();
+  else if(act === 'planEdit') openPlanForm();
+  else if(act === 'planSave') savePlan();
+  else if(act === 'planDel'){ delete pf.plan; savePf(); closeSheet(); renderPortfolio(); toast('Aylık katkı planı kaldırıldı.'); }
+  else if(act === 'oneOff') openOneOffForm();
+  else if(act === 'oneOffSave') saveOneOff();
+  else if(act === 'pfNew') openPfForm(false);
+  else if(act === 'pfEdit') openPfForm(true);
+  else if(act === 'pfSave') savePfForm(a.dataset.edit === '1');
+  else if(act === 'pfDel'){ if(confirmInline()){ portfolios = portfolios.filter(x => x.id !== pf.id); pf = portfolios[0]; holdings = pf.holdings; savePf(); closeSheet(); computeAll(); renderAll(); refresh(); toast('Portföy silindi.'); } }
   else if(act === 'saveScan'){ settings.extraBist = $('#scBist').value; settings.extraUs = $('#scUs').value; settings.scanFunds = $('#scFund').value; store.set('settings', settings); scanRes = []; scanTime = null; toast('Kaydedildi. Bir sonraki taramada eklenecek.'); renderScan(); }
   else if(act === 'copyAgain') copyText(buildPrompt()).then(ok => toast(ok ? 'Kopyalandı.' : 'Kopyalanamadı; metni elle seç.'));
   else if(act === 'saveUrl'){
@@ -1001,16 +1277,16 @@ document.addEventListener('click', e => {
   else if(act === 'testUrl') testUrl();
   else if(act === 'export') exportData();
   else if(act === 'import') $('#importFile').click();
-  else if(act === 'reset'){ if(confirmInline()){ Object.keys(mem).forEach(k => store.del(k)); try{ Object.keys(localStorage).filter(k => k.startsWith('pusula.')).forEach(k => localStorage.removeItem(k)); }catch(_){} holdings = []; signalLog = []; series = {}; settings.workerUrl = ''; toast('Tüm veriler silindi.'); refresh(); } }
+  else if(act === 'reset'){ if(confirmInline()){ Object.keys(mem).forEach(k => store.del(k)); try{ Object.keys(localStorage).filter(k => k.startsWith('pusula.')).forEach(k => localStorage.removeItem(k)); }catch(_){} portfolios = [{id:'main', name:'Ana Portföy', kind:'genel', holdings:[], targets:Object.assign({}, DEF_TARGETS)}]; pf = portfolios[0]; holdings = pf.holdings; savePf(); signalLog = []; series = {}; settings.workerUrl = ''; toast('Tüm veriler silindi.'); refresh(); } }
 });
 document.addEventListener('input', e => {
   const k = e.target.dataset && e.target.dataset.target;
-  if(k){ settings.targets[k] = Math.max(0, Math.min(100, +e.target.value || 0)); store.set('settings', settings);
-    const s = Object.values(settings.targets).reduce((a, b) => a + (+b || 0), 0); const el = $('#tsum');
+  if(k){ pf.targets[k] = Math.max(0, Math.min(100, +e.target.value || 0)); store.set('settings', settings);
+    const s = Object.values(pf.targets).reduce((a, b) => a + (+b || 0), 0); const el = $('#tsum');
     el.textContent = `Toplam: %${s}${s === 100 ? '' : ' (100 olmalı)'}`; el.className = 'small ' + (s === 100 ? 'muted' : 'warn');
     computeAll(); renderPortfolio(); }
 });
-document.addEventListener('change', e => { if(e.target.id === 'importFile' && e.target.files[0]) importData(e.target.files[0]); });
+document.addEventListener('change', e => { if(e.target.id === 'fCom') updateForm(); if(e.target.id === 'importFile' && e.target.files[0]) importData(e.target.files[0]); });
 $('#refreshBtn').addEventListener('click', () => { Object.keys(series).forEach(k => store.del('cache:' + k)); refresh(); });
 document.addEventListener('visibilitychange', () => { if(!document.hidden && lastUpdate && Date.now() - lastUpdate > 15*60e3) refresh(); });
 
