@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0c0f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Pusula">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<title>Pusula — Portföy ve Piyasa</title>
+<style>
+:root{--bg:#0a0c0f;--card:#13161b;--card2:#1a1e25;--line:#252a33;--text:#e9ecef;--muted:#8a929d;--up:#34c77b;--down:#f0605d;--warn:#f2b33d;--accent:#7aa7ff;--r:18px}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+body{padding:env(safe-area-inset-top) 0 calc(84px + env(safe-area-inset-bottom))}
+button{font:inherit;color:inherit}
+.top{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;padding:14px 18px 12px;max-width:700px;margin:0 auto;background:linear-gradient(var(--bg) 75%,rgba(10,12,15,0))}
+.brand{display:flex;align-items:center;gap:10px}
+.brand svg{width:30px;height:30px}
+h1{margin:0;font-size:24px;letter-spacing:-.02em;line-height:1.1}
+main{max-width:700px;margin:0 auto;padding:0 14px}
+.tab{display:none}.tab.active{display:block;animation:fade .2s ease-out}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;margin:0 0 12px}
+.card>h2,.sec{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 10px;font-weight:650}
+.sec{margin:18px 4px 8px}
+.big{font-size:34px;font-weight:720;letter-spacing:-.025em;line-height:1.1}
+.muted{color:var(--muted)}.small{font-size:12.5px}.tiny{font-size:11.5px}
+.up{color:var(--up)}.down{color:var(--down)}.warn{color:var(--warn)}
+.row{display:flex;align-items:center;gap:12px}.between{justify-content:space-between}.wrap{flex-wrap:wrap}
+.grow{flex:1;min-width:0}.right{text-align:right}
+.ellip{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.list>.item{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--line);cursor:pointer}
+.list>.item:first-child{border-top:0;padding-top:2px}
+.dot{width:10px;height:10px;border-radius:50%;flex:none}
+.pill{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:650;background:var(--card2);border:1px solid var(--line);white-space:nowrap}
+.pill.up{background:rgba(52,199,123,.12);border-color:rgba(52,199,123,.35)}
+.pill.down{background:rgba(240,96,93,.12);border-color:rgba(240,96,93,.35)}
+.pill.flat{color:var(--muted)}
+.btn{appearance:none;border-radius:13px;padding:12px 16px;font-weight:650;background:var(--card2);border:1px solid var(--line);cursor:pointer}
+.btn:active{transform:scale(.98)}
+.btn.primary{background:var(--accent);color:#08101f;border-color:transparent}
+.btn.block{display:block;width:100%;margin-top:8px}
+.btn.danger{color:var(--down)}
+.btn.sm{padding:8px 12px;font-size:13.5px;border-radius:11px}
+.iconbtn{width:40px;height:40px;border-radius:50%;background:var(--card);border:1px solid var(--line);display:grid;place-items:center;cursor:pointer}
+.iconbtn svg{width:20px;height:20px}
+.spin svg{animation:sp 1s linear infinite}@keyframes sp{to{transform:rotate(360deg)}}
+.tabbar{position:fixed;bottom:0;left:0;right:0;display:flex;justify-content:center;background:rgba(14,16,20,.9);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-top:1px solid var(--line);padding:6px 4px calc(6px + env(safe-area-inset-bottom));z-index:10}
+.tabbar .in{display:flex;width:100%;max-width:700px}
+.tabbar button{flex:1;background:none;border:0;color:var(--muted);font-size:10.5px;font-weight:650;display:flex;flex-direction:column;align-items:center;gap:3px;padding:4px 0;cursor:pointer}
+.tabbar svg{width:24px;height:24px}
+.tabbar button.active{color:var(--accent)}
+.rule{display:flex;gap:11px;padding:11px 0;border-top:1px solid var(--line)}
+.rule:first-of-type{border-top:0;padding-top:2px}
+.rule .ic{width:24px;height:24px;border-radius:8px;display:grid;place-items:center;flex:none;font-size:13px;font-weight:800;margin-top:1px}
+.ic.warn{background:rgba(242,179,61,.15);color:var(--warn)}.ic.info{background:rgba(122,167,255,.15);color:var(--accent)}.ic.ok{background:rgba(52,199,123,.15);color:var(--up)}
+.rule b{display:block;font-size:14.5px}.rule p{margin:2px 0 0;color:var(--muted);font-size:13.5px}
+.sheet{position:fixed;inset:0;z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.sheet-bg{position:absolute;inset:0;background:rgba(0,0,0,.6)}
+.sheet-card{position:relative;width:100%;max-width:700px;max-height:92vh;overflow:auto;background:var(--card);border-radius:22px 22px 0 0;border:1px solid var(--line);padding:8px 18px calc(18px + env(safe-area-inset-bottom));animation:up .22s ease-out}
+.grab{width:38px;height:5px;border-radius:3px;background:var(--line);margin:4px auto 12px}
+@keyframes up{from{transform:translateY(40px);opacity:.4}}
+.sheet-card h3{margin:0 0 6px;font-size:19px}
+label.f{display:block;margin:12px 0 5px;font-size:13px;color:var(--muted);font-weight:600}
+input,select,textarea{width:100%;font:inherit;font-size:16px;color:var(--text);background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:11px 12px;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+textarea{min-height:200px;font-size:13px;font-family:ui-monospace,Menlo,monospace}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.seg button{padding:9px 4px;border-radius:11px;background:var(--card2);border:1px solid var(--line);font-size:13px;font-weight:650;cursor:pointer}
+.seg button.on{background:rgba(122,167,255,.16);border-color:var(--accent);color:var(--accent)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mcard{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;min-width:0}
+.mcard .v{font-size:18px;font-weight:700;margin:2px 0 6px}
+.toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#262c37;border:1px solid #333a47;padding:10px 14px;border-radius:13px;z-index:30;white-space:pre-line;max-width:90vw;font-size:13.5px;box-shadow:0 8px 30px rgba(0,0,0,.4)}
+.hidden{display:none!important}
+.banner{max-width:672px;margin:0 auto 10px;padding:9px 12px;border-radius:13px;background:rgba(242,179,61,.1);border:1px solid rgba(242,179,61,.35);color:#f6cf7c;font-size:13px}
+.bannerwrap{padding:0 14px}
+.reasons{list-style:none;padding:0;margin:10px 0}
+.reasons li{padding:3px 0 3px 24px;position:relative;font-size:14px}
+.reasons li:before{position:absolute;left:2px;top:3px;font-weight:800}
+.reasons li.ok:before{content:"✓";color:var(--up)}.reasons li.no:before{content:"✗";color:var(--down)}
+.reasons li.w:before{content:"!";color:var(--warn);left:6px}.reasons li.n:before{content:"·";color:var(--muted);left:6px}
+.spark{width:100%;height:58px;display:block;margin:8px 0 2px}
+.meter{position:relative;height:8px;border-radius:4px;background:linear-gradient(90deg,rgba(240,96,93,.55),rgba(138,146,157,.35) 50%,rgba(52,199,123,.55));margin:10px 0 4px}
+.meter i{position:absolute;top:-4px;width:4px;height:16px;border-radius:2px;background:#fff;transform:translateX(-2px);box-shadow:0 0 0 2px var(--card)}
+.alloc{display:flex;gap:16px;align-items:center}
+.alloc svg{width:118px;height:118px;flex:none}
+.leg{flex:1;min-width:0}
+.leg .l{display:flex;align-items:center;gap:8px;font-size:13.5px;padding:3px 0}
+.bar{position:relative;height:5px;border-radius:3px;background:var(--card2);margin:2px 0 5px 18px}
+.bar span{position:absolute;left:0;top:0;bottom:0;border-radius:3px}
+.bar em{position:absolute;top:-3px;width:2px;height:11px;background:var(--text);opacity:.7}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}
+.chip{padding:7px 12px;border-radius:999px;background:var(--card);border:1px solid var(--line);font-size:13px;font-weight:650;cursor:pointer}
+.chip.on{background:rgba(122,167,255,.16);border-color:var(--accent);color:var(--accent)}
+.news .item{display:block;cursor:default}
+.news a{color:var(--text);text-decoration:none;font-weight:600;font-size:14.5px}
+.tag{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:6px;background:rgba(122,167,255,.14);color:var(--accent);margin-right:4px}
+details{margin-top:6px}details summary{cursor:pointer;color:var(--accent);font-size:13.5px;font-weight:600;list-style:none}
+details summary::-webkit-details-marker{display:none}
+details p,details li{color:var(--muted);font-size:13.5px}
+.empty{text-align:center;padding:28px 18px}
+.empty h2{text-transform:none;letter-spacing:0;font-size:20px;color:var(--text)}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+.kpis div{background:var(--card2);border-radius:12px;padding:9px 10px}
+.kpis b{display:block;font-size:15px}
+.adv{margin:10px 0 0;padding:10px 12px;border-radius:12px;background:var(--card2);font-size:14px}
+.adv p{margin:0 0 4px}.adv p:last-child{margin:0}
+.hdr{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.hdr h4{margin:0;font-size:18px}
+hr{border:0;border-top:1px solid var(--line);margin:14px 0}
+a{color:var(--accent)}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="14" fill="none" stroke="#7aa7ff" stroke-width="2"/><path d="M16 6l4 10-4 10-4-10z" fill="#7aa7ff"/><path d="M16 16l4 0-4 10z" fill="#34c77b"/></svg>
+    <div><h1>Pusula</h1><div id="status" class="muted tiny">Hazır</div></div>
+  </div>
+  <button id="refreshBtn" class="iconbtn" aria-label="Verileri yenile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v5h-5"/></svg></button>
+</header>
+<div class="bannerwrap"><div id="demoBanner" class="banner hidden"></div></div>
+<main>
+  <section id="tab-portfoy" class="tab active"></section>
+  <section id="tab-gorunum" class="tab"></section>
+  <section id="tab-tarama" class="tab"></section>
+  <section id="tab-haber" class="tab"></section>
+  <section id="tab-karne" class="tab"></section>
+  <section id="tab-ayar" class="tab"></section>
+</main>
+<nav class="tabbar"><div class="in">
+  <button data-tab="portfoy" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5V12h8.5"/></svg>Portföy</button>
+  <button data-tab="gorunum"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>Görünüm</button>
+  <button data-tab="tarama"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5M8.5 12.5l2-2 1.5 1.5 2.5-2.5"/></svg>Fırsatlar</button>
+  <button data-tab="haber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M7.5 9h9M7.5 12.5h9M7.5 16h5"/></svg>Haberler</button>
+  <button data-tab="karne"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><rect x="4" y="3.5" width="16" height="17" rx="2.5"/></svg>Karne</button>
+  <button data-tab="ayar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>Ayarlar</button>
+</div></nav>
+<div id="sheet" class="sheet hidden"><div class="sheet-bg" data-act="close"></div><div class="sheet-card" id="sheetCard"></div></div>
+<div id="toast" class="toast hidden"></div>
+
+<script>
+'use strict';
+/* ================= Sabitler ================= */
+const CLS = {
+  BIST: {label:'BIST Hisse', cur:'TRY', color:'#7aa7ff', hint:'Hisse kodu, örn. THYAO'},
+  US:   {label:'ABD Hisse/ETF', cur:'USD', color:'#b892ff', hint:'Örn. AAPL, VOO, QQQ'},
+  FUND: {label:'TEFAS Fonu', cur:'TRY', color:'#4fd1c5', hint:'3 harfli fon kodu, örn. TTE'},
+  FX:   {label:'Döviz', cur:'TRY', color:'#f6ad55', hint:'USD, EUR veya GBP'},
+  GOLD: {label:'Gram Altın', cur:'TRY', color:'#f0c419', hint:''},
+  TRY:  {label:'TL Nakit/Mevduat', cur:'TRY', color:'#9aa4b2', hint:''}
+};
+const MARKET = [
+  {key:'y:XU100.IS', name:'BIST 100'},
+  {key:'y:^GSPC', name:'S&P 500'},
+  {key:'y:USDTRY=X', name:'USD/TRY'},
+  {key:'gold', name:'Gram Altın'}
+];
+const H = 21; // sinyal ufku: ~1 ay (işlem günü)
+// Geniş tarama evreni (artık işlem görmeyen bir kod varsa sessizce atlanır)
+const BIST_UNI = 'AEFES,AGHOL,AGROT,AHGAZ,AKBNK,AKCNS,AKFGY,AKFYE,AKSA,AKSEN,ALARK,ALBRK,ALFAS,ALTNY,ANSGR,ARCLK,ASELS,ASTOR,BERA,BIENY,BIMAS,BINHO,BIOEN,BRSAN,BRYAT,BUCIM,CANTE,CCOLA,CIMSA,CLEBI,CWENE,DOAS,DOHOL,DSTKF,ECILC,EFORC,EGEEN,EKGYO,ENERY,ENJSA,ENKAI,EREGL,EUPWR,EUREN,FROTO,GARAN,GESAN,GLRMK,GRSEL,GUBRF,GWIND,HALKB,HEKTS,IPEKE,ISCTR,ISGYO,ISMEN,IZENR,KARSN,KCAER,KCHOL,KONTR,KONYA,KORDS,KOZAA,KOZAL,KRDMD,KZBGY,LMKDC,MAVI,MGROS,MIATK,MPARK,OBAMS,ODAS,OTKAR,OYAKC,PAPIL,PASEU,PETKM,PGSUS,QUAGR,RALYH,REEDR,SAHOL,SASA,SDTTR,SISE,SKBNK,SMRTG,SOKM,TABGD,TAVHL,TCELL,TERA,THYAO,TKFEN,TOASO,TRALT,TRMET,TSKB,TTKOM,TTRAK,TUKAS,TUPRS,TUREX,TURSG,ULKER,VAKBN,VESBE,VESTL,YEOTK,YKBNK,ZOREN';
+const US_UNI = 'SPY,QQQ,DIA,IWM,VTI,VOO,EFA,EEM,TLT,GLD,SLV,IBIT,SMH,XLK,XLF,XLE,XLV,XLI,XLY,XLP,XLU,XLB,XLRE,XLC,AAPL,MSFT,NVDA,AMZN,GOOGL,META,TSLA,AVGO,BRK-B,JPM,LLY,V,MA,UNH,XOM,COST,WMT,HD,PG,JNJ,ORCL,NFLX,AMD,CRM,ADBE,PLTR,KO,PEP,MRK,ABBV,BAC,CVX,MCD,CSCO,INTC,QCOM,TXN,IBM,GE,CAT,UBER,SHOP,MU,ASML,TSM,ARM,PANW,CRWD,NOW,ISRG,BKNG,DIS,NKE,SBUX,PYPL,COIN,MSTR,ANET,GS,MS,RTX';
+
+/* ================= Depolama ================= */
+const mem = {};
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem('pusula.'+k); if(v!=null) return JSON.parse(v); }catch(e){} return (k in mem) ? mem[k] : d; },
+  set(k, v){ mem[k] = v; try{ localStorage.setItem('pusula.'+k, JSON.stringify(v)); }catch(e){} },
+  del(k){ delete mem[k]; try{ localStorage.removeItem('pusula.'+k); }catch(e){} }
+};
+let holdings = store.get('holdings', []);
+let settings = Object.assign({workerUrl:'', targets:{BIST:25, US:20, FUND:15, FX:15, GOLD:20, TRY:5}, extraBist:'', extraUs:'', scanFunds:''}, store.get('settings', {}));
+let scanRes = [], scanning = false, scanTime = null, scanDone = 0, scanTotal = 0, scanFilter = 'new', discovered = {us:[], bist:[]};
+let signalLog = store.get('log', []);
+let series = {}, news = [], newsDemo = false, lastUpdate = null, newsFilter = 'mine';
+let rows = [], totals = {}, byCls = {}, rules = [], market = [];
+
+/* ================= Yardımcılar ================= */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const nf = d => new Intl.NumberFormat('tr-TR', {minimumFractionDigits:d, maximumFractionDigits:d});
+const fmtNum = (v, d=2) => v==null || isNaN(v) ? '—' : new Intl.NumberFormat('tr-TR', {maximumFractionDigits:d}).format(v);
+const fmtTRY = v => v==null || isNaN(v) ? '—' : '₺' + (Math.abs(v) >= 1000 ? nf(0) : nf(2)).format(v);
+const fmtPx = v => v==null ? '—' : (Math.abs(v) >= 1000 ? nf(0) : Math.abs(v) >= 10 ? nf(2) : nf(4)).format(v);
+const pct = v => v==null || isNaN(v) ? '—' : (v >= 0 ? '+' : '−') + '%' + nf(1).format(Math.abs(v)*100);
+const pc = v => fmtNum((v||0)*100, 0);
+const cls = v => v==null ? '' : v >= 0 ? 'up' : 'down';
+const uid = () => Math.random().toString(36).slice(2, 10);
+function today(){ const d = new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function rel(t){ if(!t) return ''; const m = Math.round((Date.now()-t)/6e4); if(m < 60) return m <= 1 ? 'az önce' : m+' dk önce'; const h = Math.round(m/60); if(h < 24) return h+' sa önce'; return Math.round(h/24)+' gün önce'; }
+function toast(msg, ms=2600){ const t = $('#toast'); t.textContent = msg; t.classList.remove('hidden'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.add('hidden'), ms); }
+function setStatus(s){ $('#status').textContent = s; }
+
+/* ================= Veri ================= */
+function keyFor(h){
+  const s = String(h.sym||'').toUpperCase().trim();
+  switch(h.cls){
+    case 'BIST': return 'y:' + s.replace(/\.IS$/,'') + '.IS';
+    case 'US': return 'y:' + s;
+    case 'FX': return 'y:' + s + 'TRY=X';
+    case 'GOLD': return 'gold';
+    case 'FUND': return 'f:' + s;
+    default: return null;
+  }
+}
+async function fetchJSON(path){
+  const base = settings.workerUrl.replace(/\/+$/, '');
+  const r = await fetch(base + path);
+  let j; try{ j = await r.json(); }catch(e){ throw new Error('HTTP ' + r.status); }
+  if(!r.ok || j.error) throw new Error(j.error || ('HTTP ' + r.status));
+  return j;
+}
+const inflight = {};
+function loadKey(key, persist = true){ return inflight[key] || (inflight[key] = _loadKey(key, persist).finally(() => delete inflight[key])); }
+async function _loadKey(key, persist){
+  if(!settings.workerUrl) return demoSeries(key);
+  const c = store.get('cache:'+key, null);
+  if(c && Date.now() - c.t < 30*60e3) return c.d;
+  if(!persist){ // tarama verisi telefona kaydedilmez (depolama dolmasın); sunucu zaten önbellekliyor
+    if(key.startsWith('y:')) return fetchJSON('/history?range=2y&s=' + encodeURIComponent(key.slice(2)));
+    if(key.startsWith('f:')) return fetchJSON('/fund?days=730&code=' + encodeURIComponent(key.slice(2)));
+  }
+  let d;
+  if(key === 'gold'){ const [g, f] = await Promise.all([loadKey('y:GC=F'), loadKey('y:USDTRY=X')]); d = combineGold(g, f); }
+  else if(key.startsWith('y:')) d = await fetchJSON('/history?range=2y&s=' + encodeURIComponent(key.slice(2)));
+  else if(key.startsWith('f:')) d = await fetchJSON('/fund?days=730&code=' + encodeURIComponent(key.slice(2)));
+  store.set('cache:'+key, {t:Date.now(), d});
+  return d;
+}
+const dayKey = t => new Date(t).toISOString().slice(0, 10);
+function combineGold(g, f){
+  const fm = new Map(f.closes.map(([t, c]) => [dayKey(t), c]));
+  let lastF = null; const out = [];
+  for(const [t, c] of g.closes){ const k = dayKey(t); if(fm.has(k)) lastF = fm.get(k); if(lastF) out.push([t, c*lastF/31.1035]); }
+  const price = (g.price && f.price) ? g.price*f.price/31.1035 : out.at(-1)?.[1];
+  return {symbol:'GRAM', name:'Gram Altın', currency:'TRY', price, time:Math.max(g.time||0, f.time||0), closes:out, demo:g.demo};
+}
+
+/* Demo veri: gerçek değildir; uygulamayı denemek için üretilir */
+function hash(s){ let h = 2166136261; for(const ch of s){ h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
+function rng(seed){ return () => { seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const DEMO_BASE = {'y:USDTRY=X':42.4,'y:EURTRY=X':49.1,'y:GBPTRY=X':55.8,'gold':5650,'y:XU100.IS':11200,'y:^GSPC':6600,'y:THYAO.IS':318,'y:ASELS.IS':182,'y:VOO':610,'y:AAPL':248,'f:TTE':3.4};
+function demoSeries(key){
+  const r = rng(hash(key));
+  const fx = key.includes('TRY=X');
+  const base = DEMO_BASE[key] ?? (key.startsWith('f:') ? 1 + r()*10 : key.endsWith('.IS') ? 20 + r()*200 : 40 + r()*300);
+  const n = 520, drift = (r() - 0.42) * (fx ? 0.0016 : 0.0014), vol = fx ? 0.004 : key === 'gold' ? 0.009 : 0.017;
+  let p = base; const arr = [];
+  for(let i = 0; i < n; i++){ arr.push(p); const z = (r() + r() + r() - 1.5) * 2; p = p / Math.exp(drift + vol*z); }
+  arr.reverse();
+  const now = Date.now();
+  const usd = key.startsWith('y:') && !key.endsWith('.IS') && !fx;
+  return {symbol:key.replace(/^[yf]:/, ''), currency: usd ? 'USD' : 'TRY', price:arr.at(-1), time:now,
+          closes:arr.map((c, i) => [now - (n-1-i)*1.4*864e5, +c.toFixed(4)]), demo:true};
+}
+function demoNews(){
+  const t = Date.now();
+  return [
+    {title:'[Örnek] Merkez bankası faiz kararı öncesi piyasalarda bekleyiş', source:'Demo', time:t-2*36e5},
+    {title:'[Örnek] Dolar/TL yeni haftaya yatay başladı', source:'Demo', time:t-5*36e5},
+    {title:'[Örnek] Ons altın güçlü talep ile rekor seviyeye yakın', source:'Demo', time:t-8*36e5},
+    {title:'[Örnek] THYAO yolcu sayısında artış açıkladı', source:'Demo', time:t-20*36e5},
+    {title:'[Örnek] Apple shares slip as investors weigh weak demand', source:'Demo', time:t-26*36e5},
+    {title:'[Örnek] BIST 100 endeksi günü düşüşle tamamladı', source:'Demo', time:t-30*36e5}
+  ].map(n => ({...n, link:'', sent:sentiment(n.title)}));
+}
+
+/* ================= Haber duygu analizi (basit kelime tabanlı) ================= */
+const POS = ['yüksel','rekor','artış','arttı','artırdı','büyüme','büyüdü','kâr','olumlu','güçlü','toparlan','prim','iyimser','faiz indirimi','yukarı','beklentinin üzerinde','surge','rally','gain','record','upgrade','growth','rise','beat','strong','bullish','soar','jump','climb'];
+const NEG = ['düşüş','düştü','geriledi','gerileme','kayıp','zarar','olumsuz','zayıf','satış baskısı','endişe','kriz','faiz artırımı','çöküş','sert düş','iflas','ceza','soruşturma','plunge','fall','drop','loss','downgrade','miss','weak','bearish','slump','fears','recession','tumble','sink','slip','lawsuit'];
+function sentiment(text){
+  const t = String(text).toLocaleLowerCase('tr'); let s = 0;
+  POS.forEach(w => { if(t.includes(w)) s++; }); NEG.forEach(w => { if(t.includes(w)) s--; });
+  return Math.max(-2, Math.min(2, s));
+}
+function termsFor(h){
+  const s = String(h.sym||'').toUpperCase(), t = [];
+  if(h.cls === 'FX') t.push(...({USD:['dolar','usd'], EUR:['euro','avro'], GBP:['sterlin','gbp']}[s] || [s.toLowerCase()]));
+  else if(h.cls === 'GOLD') t.push('altın', 'gold', 'ons');
+  else if(h.cls === 'TRY') return [];
+  else t.push(s.toLocaleLowerCase('tr'));
+  String(h.kw||'').split(',').map(x => x.trim().toLocaleLowerCase('tr')).filter(Boolean).forEach(x => t.push(x));
+  return t;
+}
+function matchTerm(text, t){
+  const e = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp('(^|[^a-z0-9çğıöşü])' + e + (t.length < 4 ? '(?![a-z0-9çğıöşü])' : ''), 'i').test(text);
+}
+function newsFor(h){
+  const terms = termsFor(h); if(!terms.length) return [];
+  const ysym = (h.cls === 'BIST' ? String(h.sym).toUpperCase() + '.IS' : String(h.sym).toUpperCase());
+  return news.filter(n => {
+    if(n.sym && n.sym.toUpperCase() === ysym) return true;
+    n._lc = n._lc || (n.title + ' ' + (n.desc||'')).toLocaleLowerCase('tr');
+    return terms.some(t => matchTerm(n._lc, t));
+  });
+}
+async function loadNews(){
+  if(!settings.workerUrl){ news = demoNews(); newsDemo = true; return; }
+  const extra = holdings.filter(h => h.cls === 'US' || h.cls === 'BIST').map(h => h.cls === 'BIST' ? String(h.sym).toUpperCase() + '.IS' : String(h.sym).toUpperCase()).slice(0, 8).join(',');
+  const j = await fetchJSON('/news?extra=' + encodeURIComponent(extra));
+  news = (j.items || []).map(n => ({...n, sent:sentiment(n.title + ' ' + (n.desc||''))}));
+  newsDemo = false;
+}
+
+/* ================= Teknik analiz ================= */
+function prep(closes){
+  const c = closes.map(x => x[1]), n = c.length, ps = [0];
+  for(const v of c) ps.push(ps[ps.length-1] + v);
+  const rsi = new Array(n).fill(null); let g = 0, l = 0;
+  for(let i = 1; i < n; i++){
+    const d = c[i] - c[i-1], u = Math.max(d, 0), dn = Math.max(-d, 0);
+    if(i <= 14){ g += u; l += dn; if(i === 14){ g /= 14; l /= 14; rsi[i] = l === 0 ? 100 : 100 - 100/(1 + g/l); } }
+    else { g = (g*13 + u)/14; l = (l*13 + dn)/14; rsi[i] = l === 0 ? 100 : 100 - 100/(1 + g/l); }
+  }
+  const sma = (i, k) => i + 1 >= k ? (ps[i+1] - ps[i+1-k]) / k : null;
+  return {c, n, rsi, sma};
+}
+function scoreAt(P, i, withText){
+  if(i < 200) return null;
+  const {c, rsi, sma} = P;
+  const p = c[i], s50 = sma(i, 50), s200 = sma(i, 200), r3 = p/c[i-63] - 1, r6 = p/c[i-126] - 1, R = rsi[i];
+  const checks = [p > s50, p > s200, s50 > s200, r3 > 0, r6 > 0];
+  let s = checks.reduce((a, ok) => a + (ok ? 1 : -1), 0);
+  if(R > 70) s -= 1; else if(R < 30) s += 1;
+  if(!withText) return {s};
+  const reasons = [
+    {k:checks[0] ? 'ok' : 'no', t:'Fiyat 50 günlük ortalamanın ' + (checks[0] ? 'üstünde' : 'altında')},
+    {k:checks[1] ? 'ok' : 'no', t:'Fiyat 200 günlük ortalamanın ' + (checks[1] ? 'üstünde' : 'altında')},
+    {k:checks[2] ? 'ok' : 'no', t:checks[2] ? '50 günlük ortalama 200 günlüğün üstünde (yükseliş yapısı)' : '50 günlük ortalama 200 günlüğün altında (düşüş yapısı)'},
+    {k:checks[3] ? 'ok' : 'no', t:'3 aylık getiri ' + pct(r3)},
+    {k:checks[4] ? 'ok' : 'no', t:'6 aylık getiri ' + pct(r6)},
+    R > 70 ? {k:'w', t:`RSI ${R.toFixed(0)}: aşırı alım, kısa vadede geri çekilme riski`}
+    : R < 30 ? {k:'w', t:`RSI ${R.toFixed(0)}: aşırı satım, tepki yükselişi gelebilir`}
+    : {k:'n', t:`RSI ${R.toFixed(0)}: nötr bölge`}
+  ];
+  return {s, reasons, p, s50, s200, r3, r6, R, r1:p/c[i-21] - 1};
+}
+const dirOf = s => s >= 3 ? 1 : s <= -3 ? -1 : 0;
+function backtest(P){
+  let upN = 0, upHit = 0, dnN = 0, dnHit = 0, all = 0, allUp = 0;
+  for(let i = 200; i < P.n - H; i++){
+    const sc = scoreAt(P, i, false); const fut = P.c[i+H] > P.c[i];
+    all++; if(fut) allUp++;
+    const d = dirOf(sc.s);
+    if(d === 1){ upN++; if(fut) upHit++; } else if(d === -1){ dnN++; if(!fut) dnHit++; }
+  }
+  return {upN, upRate:upN ? upHit/upN : null, dnN, dnRate:dnN ? dnHit/dnN : null, all, baseUp:all ? allUp/all : null};
+}
+function outlook(closes){
+  if(!closes || closes.length < 201) return {insufficient:true};
+  const P = prep(closes); const sc = scoreAt(P, P.n-1, true); const bt = backtest(P); const d = dirOf(sc.s);
+  let hit = null, N = 0, edge = null;
+  if(d === 1){ hit = bt.upRate; N = bt.upN; if(hit != null) edge = hit - bt.baseUp; }
+  if(d === -1){ hit = bt.dnRate; N = bt.dnN; if(hit != null) edge = hit - (1 - bt.baseUp); }
+  let conf;
+  if(d === 0) conf = {lvl:0, t:'Sinyal yok'};
+  else if(N < 15 || edge == null) conf = {lvl:0, t:'Belirsiz (az örnek)'};
+  else if(edge >= 0.08 && hit >= 0.6) conf = {lvl:3, t:'Görece yüksek'};
+  else if(edge >= 0.03) conf = {lvl:2, t:'Orta'};
+  else conf = {lvl:1, t:'Düşük'};
+  // Sinyal kaç işlem günüdür aynı yönde? (yeni sinyalleri yakalamak için)
+  let age = null;
+  if(d !== 0){ age = 0; for(let k = 1; k <= 30 && P.n-1-k >= 200; k++){ if(dirOf(scoreAt(P, P.n-1-k, false).s) === d) age = k; else break; } }
+  sc.age = age;
+  const label = sc.s >= 5 ? 'Güçlü yükseliş eğilimi' : sc.s >= 3 ? 'Yükseliş eğilimi' : sc.s <= -5 ? 'Güçlü düşüş eğilimi' : sc.s <= -3 ? 'Düşüş eğilimi' : 'Yatay / kararsız';
+  return {...sc, d, label, bt, hit, N, edge, conf};
+}
+
+/* ================= Portföy analizi ================= */
+const usdtry = () => series['y:USDTRY=X']?.price ?? series['y:USDTRY=X']?.closes?.at(-1)?.[1] ?? null;
+function priceOf(h){
+  if(h.manualPrice) return +h.manualPrice;
+  if(h.cls === 'TRY') return 1;
+  const s = series[keyFor(h)]; return s ? (s.price ?? s.closes?.at(-1)?.[1] ?? null) : null;
+}
+function advise(a){
+  const o = a.o, out = [];
+  if(a.h.cls === 'TRY') return ['Nakit: fırsatlar ve acil durumlar için tampon. Enflasyona karşı değer kaybettiğini unutma; para piyasası fonu gibi getirili seçeneklere bakabilirsin.'];
+  if(!o || o.insufficient){ out.push('Yeterli fiyat geçmişi yok (en az ~10 ay gerekir); sadece portföy kuralları uygulanıyor.'); return out; }
+  const w = a.weight || 0, pl = a.pl;
+  if(o.d === -1){
+    out.push(w > 0.15 ? `Düşüş eğiliminde ve portföyünün %${pc(w)}'i. Pozisyonu azaltmayı ya da bir zarar-durdur seviyesi belirlemeyi değerlendir.`
+                      : 'Düşüş eğiliminde. Yeni alım için acele etmeyip trendin dönmesini beklemek daha temkinli olur.');
+  } else if(o.d === 1){
+    if(o.R > 70 && pl != null && pl > 0.3) out.push('Trend yukarı ama aşırı alım bölgesinde ve kârın yüksek. Kademeli kâr almayı değerlendirebilirsin.');
+    else if(o.R > 70) out.push('Trend yukarı ama kısa vadede ısınmış. Ek alım için bir geri çekilme beklemek daha temkinli olur.');
+    else out.push('Trend destekliyor; mevcut pozisyonu korumak makul görünüyor.');
+  } else out.push('Net bir yön sinyali yok; acele bir değişiklik gerektirmiyor.');
+  if(pl != null && pl < -0.2) out.push(`Maliyetine göre %${pc(-pl)} zararda. Bu varlığı alma gerekçen hâlâ geçerli mi, gözden geçir.`);
+  if(a.newsScore <= -2) out.push('Son haberlerin tonu olumsuz; gelişmeleri takip et.');
+  else if(a.newsScore >= 2) out.push('Son haberlerin tonu olumlu.');
+  if(o.d !== 0 && o.conf.lvl <= 1) out.push('Not: bu sinyalin bu varlıktaki geçmiş isabeti zayıf, tek başına karar gerekçesi yapma.');
+  return out;
+}
+function portfolioRules(tot){
+  const R = [];
+  if(!rows.length || !tot) return R;
+  rows.forEach(a => {
+    if(a.weight > 0.25 && a.h.cls !== 'TRY') R.push({lvl:'warn', title:`${a.h.sym}: tek varlıkta yoğunlaşma`, text:`Portföyün %${pc(a.weight)}'i bu varlıkta. Sert bir düşüş tüm portföyü etkiler; tek varlık için genelde %10-20 üstü riskli kabul edilir.`});
+  });
+  const hedge = (byCls.FX||0) + (byCls.GOLD||0) + (byCls.US||0);
+  if(hedge < 0.2) R.push({lvl:'warn', title:'Kur ve enflasyon koruması zayıf', text:`Döviz, altın ve ABD varlıklarının toplam payı %${pc(hedge)}. TL'deki değer kaybına karşı koruman düşük.`});
+  if(hedge > 0.85) R.push({lvl:'info', title:'Neredeyse tamamen döviz/altın', text:`Payı %${pc(hedge)}. Kur sakin kalırsa veya TL reel getirisi yüksek olursa geride kalabilirsin.`});
+  rows.forEach(a => {
+    if(a.o && a.o.d === -1 && a.weight > 0.1) R.push({lvl:'warn', title:`${a.h.sym}: düşüş eğiliminde`, text:`Portföyün %${pc(a.weight)}'i ve teknik görünüm zayıf (sinyal güveni: ${a.o.conf.t.toLowerCase()}).`});
+    if(a.pl != null && a.pl > 0.5 && a.o && a.o.R > 70) R.push({lvl:'info', title:`${a.h.sym}: yüksek kâr + aşırı alım`, text:`Maliyetine göre %${pc(a.pl)} kârda ve RSI ${a.o.R.toFixed(0)}. Kademeli kâr almayı düşünebilirsin.`});
+    if(a.pl != null && a.pl < -0.25) R.push({lvl:'info', title:`${a.h.sym}: büyük zarar`, text:`Maliyetine göre %${pc(-a.pl)} zararda. Pozisyonu tutma gerekçeni gözden geçir.`});
+  });
+  Object.keys(CLS).forEach(k => {
+    const t = (settings.targets[k] || 0)/100, cur = byCls[k] || 0, diff = cur - t;
+    if(Math.abs(diff) >= 0.05) R.push({lvl:'info', title:`${CLS[k].label}: hedefin ${diff > 0 ? 'üstünde' : 'altında'}`, text:`Şu an %${pc(cur)}, hedefin %${pc(t)}. Dengelemek için yaklaşık ${fmtTRY(Math.abs(diff)*tot)} ${diff > 0 ? 'azaltılabilir' : 'eklenebilir'}.`});
+  });
+  if(!R.some(r => r.lvl === 'warn')) R.unshift({lvl:'ok', title:'Belirgin bir risk uyarısı yok', text:'Dağılım ve pozisyonlar kurallara göre dengeli görünüyor.'});
+  const ord = {warn:0, info:1, ok:2};
+  return R.sort((x, y) => ord[x.lvl] - ord[y.lvl]);
+}
+function computeAll(){
+  const fx = usdtry();
+  rows = holdings.map(h => {
+    const price = priceOf(h), mult = h.cls === 'US' ? fx : 1;
+    const valueTRY = (price != null && mult) ? price * h.qty * mult : null;
+    const costTRY = (h.cost && mult) ? h.cost * h.qty * mult : null;
+    const pl = (price != null && h.cost) ? price/h.cost - 1 : null;
+    const s = series[keyFor(h)];
+    const o = (s && h.cls !== 'TRY') ? outlook(s.closes) : null;
+    return {h, price, valueTRY, costTRY, pl, o, s};
+  });
+  const tot = rows.reduce((a, r) => a + (r.valueTRY || 0), 0);
+  let cost = 0, val = 0;
+  rows.forEach(r => { if(r.valueTRY != null && r.costTRY != null){ cost += r.costTRY; val += r.valueTRY; } });
+  byCls = {};
+  rows.forEach(r => { r.weight = tot ? (r.valueTRY || 0)/tot : 0; byCls[r.h.cls] = (byCls[r.h.cls] || 0) + r.weight; });
+  rows.forEach(r => { r.news = newsFor(r.h); r.newsScore = r.news.slice(0, 10).reduce((a, n) => a + (n.sent || 0), 0); r.advice = advise(r); });
+  totals = {tot, cost, plAbs:cost ? val - cost : null, pl:cost ? val/cost - 1 : null, usd:fx ? tot/fx : null};
+  rules = portfolioRules(tot);
+  market = MARKET.map(m => { const s = series[m.key]; return {...m, s, o:s ? outlook(s.closes) : null}; });
+}
+
+/* ================= Sinyal karnesi ================= */
+function logSignals(){
+  if(!settings.workerUrl) return; // demo verisi kaydedilmez
+  const d = today(), seen = new Set();
+  const items = [...rows.filter(r => r.o && !r.o.insufficient).map(r => ({key:keyFor(r.h), name:String(r.h.sym).toUpperCase(), o:r.o, s:r.s})),
+                 ...market.filter(m => m.o && !m.o.insufficient).map(m => ({key:m.key, name:m.name, o:m.o, s:m.s}))];
+  items.forEach(it => {
+    if(seen.has(it.key) || !it.s || it.s.stale || it.s.demo) return; seen.add(it.key);
+    if(signalLog.some(e => e.d === d && e.key === it.key)) return;
+    signalLog.push({d, t:Date.now(), key:it.key, name:it.name, dir:it.o.d, label:it.o.label, score:it.o.s, price:it.s.price ?? it.s.closes.at(-1)[1]});
+  });
+  if(signalLog.length > 3000) signalLog = signalLog.slice(-3000);
+  store.set('log', signalLog);
+}
+function priceAfter(key, t, days){
+  const s = series[key]; if(!s) return null;
+  const target = t + days*864e5; if(Date.now() < target) return null;
+  for(const [ts, v] of s.closes) if(ts >= target) return v;
+  return s.price ?? null;
+}
+
+/* ================= Yenileme ================= */
+let busy = false;
+async function refresh(){
+  if(busy) return; busy = true;
+  $('#refreshBtn').classList.add('spin'); setStatus('Güncelleniyor…');
+  const keys = new Set(['y:USDTRY=X', ...MARKET.map(m => m.key)]);
+  holdings.forEach(h => { if(!h.manualPrice){ const k = keyFor(h); if(k) keys.add(k); } });
+  const errs = [];
+  await Promise.all([...keys].map(async k => {
+    try{ series[k] = await loadKey(k); }
+    catch(e){ const c = store.get('cache:'+k, null); if(c) series[k] = {...c.d, stale:true}; errs.push(k.replace(/^[yf]:/, '').replace('gold','Altın') + ': ' + e.message); }
+  }));
+  try{ await loadNews(); }catch(e){ errs.push('Haberler: ' + e.message); }
+  lastUpdate = Date.now();
+  computeAll(); logSignals(); renderAll();
+  busy = false; $('#refreshBtn').classList.remove('spin');
+  setStatus((settings.workerUrl ? 'Güncellendi ' : 'Demo veri · ') + new Date().toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit'}) + (errs.length ? ` · ${errs.length} kaynak alınamadı` : ''));
+  if(errs.length) toast('Alınamayan veriler:\n' + errs.slice(0, 4).join('\n'), 5000);
+}
+
+/* ================= Çizimler ================= */
+function spark(closes, n=126){
+  const c = closes.slice(-n).map(x => x[1]); if(c.length < 2) return '';
+  const w = 300, h = 58, mn = Math.min(...c), mx = Math.max(...c), k = mx - mn || 1;
+  const pts = c.map((v, i) => `${(i/(c.length-1)*w).toFixed(1)},${(h - 3 - (v - mn)/k*(h - 6)).toFixed(1)}`).join(' ');
+  const col = c.at(-1) >= c[0] ? 'var(--up)' : 'var(--down)';
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg>`;
+}
+function donut(){
+  const R = 46, C = 2*Math.PI*R; let off = 0, segs = '';
+  Object.keys(CLS).forEach(k => {
+    const v = byCls[k] || 0; if(v <= 0) return;
+    const len = Math.max(v*C - 2, 0.5);
+    segs += `<circle r="${R}" cx="60" cy="60" fill="none" stroke="${CLS[k].color}" stroke-width="16" stroke-dasharray="${len} ${C - len}" stroke-dashoffset="${-off}" transform="rotate(-90 60 60)"/>`;
+    off += v*C;
+  });
+  return `<svg viewBox="0 0 120 120" aria-hidden="true"><circle r="${R}" cx="60" cy="60" fill="none" stroke="var(--card2)" stroke-width="16"/>${segs}</svg>`;
+}
+const pillCls = o => !o || o.insufficient ? 'flat' : o.d === 1 ? 'up' : o.d === -1 ? 'down' : 'flat';
+const pillTxt = o => !o ? '—' : o.insufficient ? 'Veri az' : o.d === 1 ? '▲ Yükseliş' : o.d === -1 ? '▼ Düşüş' : '■ Yatay';
+
+/* ================= Ekranlar ================= */
+function renderAll(){
+  const demo = !settings.workerUrl;
+  const b = $('#demoBanner');
+  b.classList.toggle('hidden', !demo);
+  b.innerHTML = 'Demo mod: fiyatlar ve haberler <b>gerçek değil</b>. Gerçek veriler için <a href="#" data-tab-go="ayar">Ayarlar</a>\'dan veri sunucusunu bağla.';
+  renderPortfolio(); renderOutlook(); renderScan(); renderNews(); renderKarne(); renderSettings();
+}
+
+function renderPortfolio(){
+  const el = $('#tab-portfoy');
+  if(!holdings.length){
+    el.innerHTML = `<div class="card empty"><h2>Portföyünü ekleyerek başla</h2>
+      <p class="muted">Hisse, fon, döviz, altın ve TL varlıklarını ekle. Pusula dağılımını, kâr-zararını, risklerini ve piyasa görünümünü analiz etsin.</p>
+      <button class="btn primary block" data-act="add">+ Varlık ekle</button>
+      <button class="btn block" data-act="demo">Örnek portföyle dene</button></div>`;
+    return;
+  }
+  const t = totals;
+  let h = `<div class="card">
+    <div class="muted small">Toplam değer</div>
+    <div class="big">${fmtTRY(t.tot)}</div>
+    <div class="kpis">
+      <div><span class="muted tiny">Kâr / zarar</span><b class="${cls(t.pl)}">${t.plAbs != null ? (t.plAbs >= 0 ? '+' : '−') + fmtTRY(Math.abs(t.plAbs)) : '—'}</b></div>
+      <div><span class="muted tiny">Getiri</span><b class="${cls(t.pl)}">${pct(t.pl)}</b></div>
+      <div><span class="muted tiny">Dolar karşılığı</span><b>${t.usd != null ? '$' + fmtNum(t.usd, 0) : '—'}</b></div>
+    </div>
+    <div class="muted tiny" style="margin-top:8px">ABD varlıklarının TL maliyeti bugünkü kurla hesaplanır; getirileri dolar bazındadır.</div>
+  </div>`;
+  h += `<div class="card"><h2>Dağılım ve hedef</h2><div class="alloc">${donut()}<div class="leg">`;
+  Object.keys(CLS).forEach(k => {
+    const v = byCls[k] || 0, tg = (settings.targets[k] || 0)/100; if(!v && !tg) return;
+    h += `<div class="l"><span class="dot" style="background:${CLS[k].color}"></span><span class="grow ellip">${CLS[k].label}</span><b>%${pc(v)}</b><span class="muted tiny" style="width:52px;text-align:right">hedef %${pc(tg)}</span></div>
+          <div class="bar"><span style="width:${Math.min(v*100, 100)}%;background:${CLS[k].color}"></span><em style="left:${Math.min(tg*100, 100)}%"></em></div>`;
+  });
+  h += `</div></div></div>`;
+  h += `<div class="card"><h2>Yönlendirmeler</h2>${rules.map(r => `<div class="rule"><div class="ic ${r.lvl}">${r.lvl === 'warn' ? '!' : r.lvl === 'ok' ? '✓' : 'i'}</div><div><b>${esc(r.title)}</b><p>${esc(r.text)}</p></div></div>`).join('')}
+    <button class="btn block" data-act="claude">✦ Claude ile AL / SAT analizi</button></div>`;
+  h += `<div class="card"><div class="row between" style="margin-bottom:8px"><h2 style="margin:0">Varlıklar</h2><button class="btn sm primary" data-act="add">+ Ekle</button></div><div class="list">`;
+  [...rows].sort((a, b) => (b.valueTRY || 0) - (a.valueTRY || 0)).forEach(r => {
+    const c = CLS[r.h.cls];
+    h += `<div class="item" data-edit="${r.h.id}">
+      <span class="dot" style="background:${c.color}"></span>
+      <div class="grow"><div class="row" style="gap:8px"><b class="ellip">${esc(String(r.h.sym).toUpperCase())}</b>${r.h.cls !== 'TRY' ? `<span class="pill ${pillCls(r.o)}">${pillTxt(r.o)}</span>` : ''}</div>
+        <div class="muted small ellip">${c.label} · ${fmtNum(r.h.qty, 4)} ${r.h.cls === 'TRY' ? 'TL' : r.h.cls === 'GOLD' ? 'gr' : 'adet'}${r.price != null && r.h.cls !== 'TRY' ? ' · ' + fmtPx(r.price) + (c.cur === 'USD' ? ' $' : ' ₺') : ''}${r.h.manualPrice ? ' (elle)' : ''}</div></div>
+      <div class="right"><b>${fmtTRY(r.valueTRY)}</b><div class="small ${cls(r.pl)}">${r.pl != null ? pct(r.pl) : '%' + pc(r.weight)}</div></div></div>`;
+  });
+  h += `</div></div><p class="muted tiny" style="text-align:center;padding:0 10px">Pusula kişisel bilgilendirme aracıdır, yatırım danışmanlığı değildir. Kararlar ve sorumluluk sana aittir.</p>`;
+  el.innerHTML = h;
+}
+
+function outlookCard(title, sub, o, s, advice, newsList){
+  let h = `<div class="card"><div class="hdr"><div><h4>${esc(title)}</h4><div class="muted small">${esc(sub)}</div></div><span class="pill ${pillCls(o)}">${pillTxt(o)}</span></div>`;
+  if(!s){ return h + `<p class="muted small">Fiyat verisi yok.</p></div>`; }
+  h += spark(s.closes);
+  h += `<div class="row between small muted"><span>Son 6 ay</span><span>${s.time ? new Date(s.time).toLocaleString('tr-TR', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'}) : ''}${s.demo ? ' · demo' : ''}${s.stale ? ' · eski veri' : ''}</span></div>`;
+  if(!o || o.insufficient){ h += `<p class="muted small">Teknik görünüm için en az ~10 aylık fiyat geçmişi gerekiyor.</p>`; }
+  else {
+    h += `<div style="margin-top:12px" class="row between"><b>${o.label}</b><span class="small muted">Puan ${o.s > 0 ? '+' : ''}${o.s} / 6</span></div>
+      <div class="meter"><i style="left:${((o.s + 6)/12*100).toFixed(1)}%"></i></div>
+      <ul class="reasons">${o.reasons.map(r => `<li class="${r.k}">${esc(r.t)}</li>`).join('')}</ul>`;
+    const bt = o.bt;
+    if(o.d !== 0 && o.hit != null){
+      h += `<div class="small"><b>Sinyal güveni: ${o.conf.t}.</b> <span class="muted">Son ~2 yılda bu varlıkta aynı yönlü sinyal ${o.N} işlem gününde oluştu; 1 ay sonra fiyat %${pc(o.hit)} oranında beklenen yöne gitti. Karşılaştırma: herhangi bir günde 1 ay sonra ${o.d === 1 ? 'yükselmiş olma' : 'düşmüş olma'} oranı %${pc(o.d === 1 ? bt.baseUp : 1 - bt.baseUp)}.</span></div>`;
+    } else if(o.d !== 0){
+      h += `<div class="small muted"><b>Sinyal güveni: ${o.conf.t}.</b> Geçmişte bu yönde yeterli sinyal oluşmamış.</div>`;
+    } else {
+      h += `<div class="small muted">Göstergeler karışık; belirgin bir yön yok. (Geçmişte yükseliş sinyali isabeti: ${bt.upRate != null ? '%' + pc(bt.upRate) : '—'}, düşüş: ${bt.dnRate != null ? '%' + pc(bt.dnRate) : '—'})</div>`;
+    }
+  }
+  if(newsList && newsList.length){
+    const sc = newsList.slice(0, 10).reduce((a, n) => a + (n.sent || 0), 0);
+    h += `<div class="small" style="margin-top:8px"><b>Haber havası:</b> <span class="${sc > 1 ? 'up' : sc < -1 ? 'down' : 'muted'}">${sc > 1 ? 'olumlu' : sc < -1 ? 'olumsuz' : 'nötr / karışık'}</span> <span class="muted">(${newsList.length} haber, basit kelime analizi)</span></div>`;
+  }
+  if(advice && advice.length) h += `<div class="adv">${advice.map(a => `<p>${esc(a)}</p>`).join('')}</div>`;
+  return h + `</div>`;
+}
+
+function renderOutlook(){
+  const el = $('#tab-gorunum');
+  let h = `<details class="card" style="padding:12px 16px"><summary>Bu sinyaller nasıl hesaplanıyor? ▾</summary>
+    <p>Her varlık için 6 teknik kontrol yapılır: fiyatın 50 ve 200 günlük ortalamaya göre yeri, iki ortalamanın birbirine göre durumu, 3 ve 6 aylık getiri ve RSI (aşırı alım/satım). Puan −6 ile +6 arasındadır; +3 ve üstü "yükseliş", −3 ve altı "düşüş" eğilimi sayılır.</p>
+    <p>Sinyal güveni, aynı kuralın bu varlığın son ~2 yıllık geçmişinde 1 ay sonrasını ne sıklıkla doğru bildiğine bakar ve bunu "hep yükselir demek" gibi basit bir tahminle karşılaştırır. Ardışık günler birbirine benzediği için bu oranlar iyimser olabilir. Geçmiş başarı geleceği garanti etmez.</p>
+    <p>Haber havası ayrı gösterilir ve puana katılmaz; çünkü geçmişte test edilemez.</p></details>`;
+  h += `<div class="sec">Piyasa geneli</div><div class="grid2">`;
+  market.forEach(m => {
+    const s = m.s, o = m.o, last = s ? (s.price ?? s.closes.at(-1)[1]) : null;
+    const r1 = o && !o.insufficient ? o.r1 : null;
+    h += `<div class="mcard"><div class="row between"><span class="small muted">${m.name}</span><span class="pill ${pillCls(o)}" style="font-size:11px;padding:2px 7px">${pillTxt(o)}</span></div>
+      <div class="v">${last != null ? fmtPx(last) : '—'}</div><div class="small ${cls(r1)}">${r1 != null ? pct(r1) + ' (1 ay)' : ''}</div>${s ? spark(s.closes, 90) : ''}</div>`;
+  });
+  h += `</div>`;
+  const rs = rows.filter(r => r.h.cls !== 'TRY');
+  h += `<div class="sec">Portföyündeki varlıklar</div>`;
+  if(!rs.length) h += `<div class="card muted">Portföyüne varlık eklediğinde burada her biri için görünüm ve öneri çıkacak.</div>`;
+  rs.sort((a, b) => b.weight - a.weight).forEach(r => {
+    h += outlookCard(String(r.h.sym).toUpperCase(), `${CLS[r.h.cls].label} · portföyün %${pc(r.weight)}'i${r.pl != null ? ' · K/Z ' + pct(r.pl) : ''}`, r.o, r.s, r.advice, r.news);
+  });
+  h += `<button class="btn block" data-act="claude">✦ Claude ile AL / SAT analizi</button>`;
+  el.innerHTML = h;
+}
+
+function renderNews(){
+  const el = $('#tab-haber');
+  const mineSet = new Set(); const tagMap = new Map();
+  rows.forEach(r => r.news.forEach(n => { mineSet.add(n); if(!tagMap.has(n)) tagMap.set(n, []); tagMap.get(n).push(String(r.h.sym).toUpperCase()); }));
+  const list = newsFilter === 'mine' ? news.filter(n => mineSet.has(n)) : news;
+  let h = `<div class="chips"><button class="chip ${newsFilter === 'mine' ? 'on' : ''}" data-nf="mine">Portföyümle ilgili (${mineSet.size})</button><button class="chip ${newsFilter === 'all' ? 'on' : ''}" data-nf="all">Tümü (${news.length})</button></div>`;
+  if(newsDemo) h += `<div class="card small muted">Demo mod: aşağıdakiler örnek başlıklardır, gerçek haber değildir.</div>`;
+  if(!list.length) h += `<div class="card muted">${newsFilter === 'mine' ? 'Portföyündeki varlıklarla eşleşen haber bulunamadı. Varlığı düzenleyip "haber anahtar kelimeleri" ekleyebilirsin (örn. THYAO için "Türk Hava Yolları, THY").' : 'Haber bulunamadı.'}</div>`;
+  else {
+    h += `<div class="card list news">`;
+    list.slice(0, 80).forEach(n => {
+      const tags = tagMap.get(n) || [];
+      const title = esc(n.title);
+      h += `<div class="item"><div class="row" style="align-items:flex-start;gap:10px"><span class="dot" style="margin-top:6px;background:${n.sent > 0 ? 'var(--up)' : n.sent < 0 ? 'var(--down)' : 'var(--line)'}"></span><div class="grow">
+        ${/^https?:\/\//.test(n.link || '') ? `<a href="${esc(n.link)}" target="_blank" rel="noopener">${title}</a>` : `<span style="font-weight:600">${title}</span>`}
+        <div class="muted tiny" style="margin-top:3px">${tags.map(t => `<span class="tag">${esc(t)}</span>`).join('')}${esc(n.source || '')}${n.time ? ' · ' + rel(n.time) : ''}</div></div></div></div>`;
+    });
+    h += `</div><p class="muted tiny" style="text-align:center">Nokta rengi basit kelime analizine göre tonu gösterir: yeşil olumlu, kırmızı olumsuz. Hata yapabilir.</p>`;
+  }
+  el.innerHTML = h;
+}
+
+function renderKarne(){
+  const el = $('#tab-karne');
+  let h = `<div class="card"><h2>Sinyal karnesi</h2><p class="muted small" style="margin:0">Pusula her gün verdiği yön sinyalini kaydeder. 1 hafta ve 1 ay sonra tutup tutmadığını burada görürsün. Demo veriler kaydedilmez.</p></div>`;
+  const evals = {7:{n:0, hit:0}, 30:{n:0, hit:0}};
+  const recent = [];
+  signalLog.forEach(e => {
+    if(e.dir === 0) return;
+    const res = {};
+    [7, 30].forEach(dd => {
+      const p2 = priceAfter(e.key, e.t, dd);
+      if(p2 != null){ const ok = (p2 > e.price) === (e.dir === 1); evals[dd].n++; if(ok) evals[dd].hit++; res[dd] = {ok, chg:p2/e.price - 1}; }
+    });
+    recent.push({...e, res});
+  });
+  h += `<div class="grid2">${[7, 30].map(dd => `<div class="mcard"><div class="small muted">${dd === 7 ? '1 hafta sonra' : '1 ay sonra'}</div><div class="v">${evals[dd].n ? '%' + pc(evals[dd].hit/evals[dd].n) : '—'}</div><div class="small muted">${evals[dd].n} sinyal değerlendirildi</div></div>`).join('')}</div>`;
+  if(evals[30].n && evals[30].n < 30) h += `<p class="muted small" style="padding:0 4px">Henüz az sayıda sinyal var; oran birkaç ay sonra anlamlı hale gelir. %50 civarı yazı-tura demektir.</p>`;
+  const lst = recent.slice(-40).reverse();
+  h += `<div class="card list" style="margin-top:12px">`;
+  if(!lst.length) h += `<div class="muted small">${settings.workerUrl ? 'Henüz kayıtlı yön sinyali yok. Uygulamayı her gün bir kez açman yeterli.' : 'Gerçek veri bağlandığında sinyaller burada birikmeye başlayacak.'}</div>`;
+  lst.forEach(e => {
+    const r = e.res[30] || e.res[7];
+    h += `<div class="item" style="cursor:default"><div class="grow"><b>${esc(e.name)}</b> <span class="pill ${e.dir === 1 ? 'up' : 'down'}">${e.dir === 1 ? '▲' : '▼'} ${esc(e.label)}</span><div class="muted tiny">${e.d} · ${fmtPx(e.price)}</div></div>
+      <div class="right small">${r ? `<b class="${r.ok ? 'up' : 'down'}">${r.ok ? 'Tuttu' : 'Tutmadı'}</b><div class="muted tiny">${pct(r.chg)} (${e.res[30] ? '1 ay' : '1 hf'})</div>` : '<span class="muted">Bekleniyor</span>'}</div></div>`;
+  });
+  el.innerHTML = h + `</div>`;
+}
+
+function renderSettings(){
+  const el = $('#tab-ayar');
+  const tsum = Object.values(settings.targets).reduce((a, b) => a + (+b || 0), 0);
+  el.innerHTML = `<div class="card"><h2>Veri sunucusu</h2>
+    <p class="muted small" style="margin-top:0">Gerçek fiyat ve haberler için kendi ücretsiz Cloudflare Worker adresini gir. Boş bırakırsan uygulama demo veriyle çalışır.</p>
+    <input id="wUrl" type="url" inputmode="url" placeholder="https://pusula.kullaniciadin.workers.dev" value="${esc(settings.workerUrl)}">
+    <div class="row" style="margin-top:8px"><button class="btn sm primary" data-act="saveUrl">Kaydet</button><button class="btn sm" data-act="testUrl">Bağlantıyı test et</button></div></div>
+  <div class="card"><h2>Hedef dağılım (%)</h2>
+    <div class="grid2">${Object.keys(CLS).map(k => `<label><span class="muted small">${CLS[k].label}</span><input type="number" inputmode="decimal" min="0" max="100" data-target="${k}" value="${settings.targets[k] ?? 0}"></label>`).join('')}</div>
+    <div class="small ${tsum === 100 ? 'muted' : 'warn'}" style="margin-top:8px" id="tsum">Toplam: %${tsum}${tsum === 100 ? '' : ' (100 olmalı)'}</div>
+    <p class="muted tiny">Yönlendirmeler gerçek dağılımı bu hedeflerle karşılaştırır. Hedefi risk iştahına göre sen belirle.</p></div>
+  <div class="card"><h2>Fırsat tarayıcıya ekle</h2>
+    <p class="muted small" style="margin-top:0">Tarayıcı zaten geniş bir listeye ve günün keşiflerine bakar. Takip etmek istediğin başka semboller varsa virgülle ekle.</p>
+    <label class="f">Ek BIST hisseleri</label><input id="scBist" placeholder="örn. KLSER, ALTNY" value="${esc(settings.extraBist)}">
+    <label class="f">Ek ABD hisse/ETF</label><input id="scUs" placeholder="örn. SOFI, VXUS" value="${esc(settings.extraUs)}">
+    <label class="f">TEFAS fon kodları</label><input id="scFund" placeholder="örn. TTE, AFT" value="${esc(settings.scanFunds)}">
+    <button class="btn sm primary" style="margin-top:8px" data-act="saveScan">Kaydet</button></div>
+  <div class="card"><h2>Yedekleme</h2>
+    <p class="muted small" style="margin-top:0">Portföyün yalnızca bu cihazda saklanır. Telefon değiştirirken veya Safari verilerini silmeden önce yedek al.</p>
+    <button class="btn block" data-act="export">Yedeği indir (JSON)</button>
+    <button class="btn block" data-act="import">Yedekten geri yükle</button>
+    <input type="file" id="importFile" accept="application/json,.json" class="hidden"></div>
+  <div class="card"><h2>Diğer</h2>
+    <button class="btn block" data-act="demo">Örnek portföyü yükle</button>
+    <button class="btn block danger" data-act="reset">Tüm verileri sil</button></div>
+  <div class="card small muted"><b style="color:var(--text)">Önemli</b><br>Pusula kural tabanlı sinyaller ve basit haber analizi üretir; kimse piyasanın yönünü kesin bilemez. Burada yazanlar yatırım danışmanlığı değildir. Fiyatlar ücretsiz kaynaklardan gelir ve gecikmeli ya da hatalı olabilir; işlem yapmadan önce aracı kurumundaki fiyatı kontrol et.</div>`;
+}
+
+/* ================= Fırsat tarayıcı ================= */
+function scanUniverse(){
+  const list = s => String(s || '').toUpperCase().split(/[,\s]+/).map(x => x.trim()).filter(x => /^[A-Z0-9.\-]{1,12}$/.test(x));
+  const items = [];
+  // Önce keşfedilenler (kaynak etiketi korunsun diye), sonra geniş evren ve kullanıcının ekledikleri
+  discovered.bist.forEach(x => items.push({cls:'BIST', sym:x.sym, src:x.src, note:x.note}));
+  discovered.us.forEach(x => items.push({cls:'US', sym:x.sym, src:x.src}));
+  list(settings.extraBist).forEach(s => items.push({cls:'BIST', sym:s, src:'Senin listen'}));
+  list(settings.extraUs).forEach(s => items.push({cls:'US', sym:s, src:'Senin listen'}));
+  list(settings.scanFunds).forEach(s => items.push({cls:'FUND', sym:s, src:'Senin listen'}));
+  list(BIST_UNI).forEach(s => items.push({cls:'BIST', sym:s}));
+  list(US_UNI).forEach(s => items.push({cls:'US', sym:s}));
+  ['USD', 'EUR', 'GBP'].forEach(s => items.push({cls:'FX', sym:s}));
+  items.push({cls:'GOLD', sym:'GRAM'});
+  const seen = new Set();
+  return items.filter(it => { const k = keyFor(it); if(seen.has(k)) return false; seen.add(k); it.key = k; return true; });
+}
+async function runScan(){
+  if(scanning) return; scanning = true; scanDone = 0; scanTotal = 0; renderScan();
+  if(settings.workerUrl){ try{ discovered = await fetchJSON('/discover'); }catch(e){ discovered = {us:[], bist:[]}; } }
+  const items = scanUniverse(); scanTotal = items.length; scanRes = [];
+  const owned = new Set(holdings.map(h => keyFor(h)));
+  renderScan();
+  let i = 0, errs = 0;
+  const worker = async () => {
+    while(i < items.length){
+      const it = items[i++];
+      try{
+        const s = series[it.key] && !series[it.key].stale ? series[it.key] : await loadKey(it.key, false);
+        if(owned.has(it.key) || MARKET.some(m => m.key === it.key)) series[it.key] = s;
+        const o = outlook(s.closes);
+        if(!o.insufficient) scanRes.push({...it, s, o, owned:owned.has(it.key)});
+      }catch(e){ errs++; }
+      scanDone++;
+      if(scanDone % 6 === 0) renderScan();
+    }
+  };
+  await Promise.all(Array.from({length:6}, worker));
+  scanning = false; scanTime = Date.now();
+  // Bir önceki taramada görmediğin yeni yükseliş sinyallerini işaretle
+  const seenBefore = new Set(store.get('seenUp', []));
+  const fresh = scanRes.filter(r => r.o.d === 1 && r.o.age != null && r.o.age <= 5);
+  scanRes.forEach(r => { if(r.o.d === 1){ const c = r.s.closes; r.o.age0 = dayKey(c[Math.max(0, c.length - 1 - (r.o.age || 0))][0]); } });
+  const unseen = fresh.filter(r => !seenBefore.has(r.key + '|' + r.o.age0));
+  unseen.forEach(r => r.unseen = true);
+  store.set('seenUp', [...seenBefore, ...unseen.map(r => r.key + '|' + r.o.age0)].slice(-600));
+  try{ if(navigator.setAppBadge) unseen.length ? navigator.setAppBadge(unseen.length) : navigator.clearAppBadge(); }catch(_){}
+  store.set('lastScan', Date.now());
+  renderScan();
+  if(unseen.length) toast(`${unseen.length} varlıkta yeni yükseliş sinyali var. Fırsatlar sekmesine bak.`, 4000);
+  else if(errs > scanTotal/2) toast(`${errs} sembolün verisi alınamadı.`);
+}
+function rankScan(a, b){
+  return (b.o.conf.lvl - a.o.conf.lvl) || (Math.abs(b.o.s) - Math.abs(a.o.s)) || ((b.o.edge || 0) - (a.o.edge || 0));
+}
+function scanItemHTML(r){
+  const o = r.o, c = CLS[r.cls], cur = c.cur === 'USD' ? ' $' : ' ₺';
+  const name = r.cls === 'GOLD' ? 'Gram Altın' : r.cls === 'FX' ? r.sym + '/TRY' : r.sym;
+  let tip;
+  if(o.d === 1){
+    tip = o.R > 70 ? `Trend yukarı ama RSI ${o.R.toFixed(0)} ile ısınmış. İncelemek istersen tek seferde değil, geri çekilmelerde kademeli almak daha temkinli olur.`
+                   : `Trend yukarı. İncelemek istersen sinyal, fiyat 50 günlük ortalamanın (${fmtPx(o.s50)}${cur}) altına inerse zayıflar; bu seviye bir çıkış/zarar-durdur referansı olabilir.`;
+  } else if(o.d === -1){
+    tip = `Düşüş eğiliminde. Sinyal, fiyat 50 günlük ortalamanın (${fmtPx(o.s50)}${cur}) üstüne çıkmadan dönüş teyit edilmiş sayılmaz.`;
+  } else tip = 'Göstergeler karışık; net bir yön yok.';
+  return `<details class="card" style="padding:12px 14px"><summary style="color:var(--text)">
+    <div class="row"><div class="grow"><div class="row" style="gap:8px"><b>${esc(name)}</b><span class="pill ${pillCls(o)}">${pillTxt(o)}</span>${r.unseen ? '<span class="tag" style="background:rgba(52,199,123,.18);color:var(--up)">YENİ</span>' : ''}${r.owned ? '<span class="tag">Portföyde</span>' : ''}</div>
+      <div class="muted small">${c.label} · ${fmtPx(o.p)}${cur} · güven: ${o.conf.t.toLowerCase()}</div>
+      ${o.d !== 0 && o.age != null && o.age <= 10 ? `<div class="small ${o.d === 1 ? 'up' : 'down'}">${o.age === 0 ? 'Bugün' : o.age + ' işlem günü önce'} ${o.d === 1 ? 'yükselişe' : 'düşüşe'} geçti</div>` : ''}
+      ${r.src ? `<div class="tiny muted">Kaynak: ${esc(r.src)}${r.note ? ' · “' + esc(r.note.slice(0, 80)) + '”' : ''}</div>` : ''}</div>
+      <div class="right small"><div class="${cls(o.r1)}">${pct(o.r1)} <span class="muted">1a</span></div><div class="${cls(o.r3)}">${pct(o.r3)} <span class="muted">3a</span></div></div></div></summary>
+    ${spark(r.s.closes)}
+    <div class="row between small"><b>${o.label}</b><span class="muted">Puan ${o.s > 0 ? '+' : ''}${o.s} / 6</span></div>
+    <ul class="reasons">${o.reasons.map(x => `<li class="${x.k}">${esc(x.t)}</li>`).join('')}</ul>
+    ${o.hit != null ? `<div class="small muted">Geçmiş isabet: aynı yönlü sinyal ${o.N} günde oluştu, 1 ay sonra %${pc(o.hit)} doğru çıktı (taban oran %${pc(o.d === 1 ? o.bt.baseUp : 1 - o.bt.baseUp)}).</div>` : ''}
+    <div class="adv"><p>${esc(tip)}</p>${o.d === 1 && !r.owned ? '<p class="muted small">Pozisyon büyüklüğü: tek bir yeni varlığa portföyün %5-10\'undan fazlasını ayırmamak genel bir risk kuralıdır.</p>' : ''}</div>
+    ${!r.owned && r.cls !== 'GOLD' ? `<button class="btn sm block" data-add-cls="${r.cls}" data-add-sym="${esc(r.sym)}">+ Portföye ekle</button>` : ''}
+  </details>`;
+}
+function renderScan(){
+  const el = $('#tab-tarama'); if(!el) return;
+  const fresh = scanRes.filter(r => r.o.d === 1 && r.o.age != null && r.o.age <= 5).sort((a, b) => (b.unseen ? 1 : 0) - (a.unseen ? 1 : 0) || a.o.age - b.o.age || rankScan(a, b));
+  const up = scanRes.filter(r => r.o.d === 1).sort(rankScan);
+  const dn = scanRes.filter(r => r.o.d === -1).sort(rankScan);
+  const flat = scanRes.filter(r => r.o.d === 0).sort((a, b) => b.o.s - a.o.s);
+  let h = `<div class="card"><h2>Fırsat tarayıcı</h2>
+    <p class="muted small" style="margin:0 0 10px">Her taramada ~120 BIST hissesi, ~85 ABD hisse/ETF'si, döviz ve altına bakar. Buna ek olarak günün en çok yükselen ve işlem gören ABD hisselerini, haberlerde adı geçen BIST hisselerini de otomatik ekler. <b>Yeni sinyaller</b> son 5 işlem günü içinde yükselişe geçenlerdir; daha önce görmediklerin "YENİ" etiketiyle gelir.</p>
+    <button class="btn primary block" data-act="scan" ${scanning ? 'disabled' : ''}>${scanning ? (scanTotal ? `Taranıyor… ${scanDone}/${scanTotal}` : 'Yeni adaylar aranıyor…') : scanTime ? 'Yeniden tara' : 'Taramayı başlat'}</button>
+    ${scanTime ? `<div class="muted tiny" style="margin-top:6px;text-align:center">Son tarama ${new Date(scanTime).toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit'})} · ${scanRes.length} varlık analiz edildi${discovered.us.length + discovered.bist.length ? ` · ${discovered.us.length + discovered.bist.length} keşif adayı` : ''}${!settings.workerUrl ? ' · demo veri' : ''}</div>` : ''}</div>`;
+  if(scanRes.length){
+    h += `<div class="chips"><button class="chip ${scanFilter === 'new' ? 'on' : ''}" data-sf="new">✦ Yeni sinyaller (${fresh.length})</button><button class="chip ${scanFilter === 'up' ? 'on' : ''}" data-sf="up">▲ Yükselişte (${up.length})</button><button class="chip ${scanFilter === 'down' ? 'on' : ''}" data-sf="down">▼ Düşüşte (${dn.length})</button><button class="chip ${scanFilter === 'flat' ? 'on' : ''}" data-sf="flat">Yatay (${flat.length})</button></div>`;
+    const lst = scanFilter === 'new' ? fresh : scanFilter === 'up' ? up : scanFilter === 'down' ? dn : flat;
+    if(scanFilter === 'new') h += `<p class="muted small" style="margin:0 4px 10px">Yeni dönen trendler daha erken bir fırsat olabilir, ama oturmuş trendlere göre daha sık geri döner. Güven seviyesine mutlaka bak.</p>`;
+    if(!lst.length) h += `<div class="card muted small">Bu grupta varlık yok.</div>`;
+    h += `<button class="btn block" style="margin-bottom:12px" data-act="claude">✦ Bu adayları Claude ile AL / SAT analizine sok</button>`;
+    h += lst.map(scanItemHTML).join('');
+    h += `<p class="muted tiny" style="text-align:center;padding:0 8px">Bu liste trend takip eden bir filtredir, "al" emri değildir. Yükselişteki bir varlık her an dönebilir; güven seviyesi "düşük" olanlarda sinyal geçmişte yazı-turadan belirgin iyi değildi.</p>`;
+  }
+  el.innerHTML = h;
+}
+
+/* ================= Varlık formu ================= */
+let formCls = 'BIST';
+function openSheet(html){ $('#sheetCard').innerHTML = '<div class="grab"></div>' + html; $('#sheet').classList.remove('hidden'); }
+function closeSheet(){ $('#sheet').classList.add('hidden'); }
+function openForm(id, pre){
+  const h = holdings.find(x => x.id === id) || Object.assign({cls:'BIST', sym:'', qty:'', cost:''}, pre || {});
+  formCls = h.cls;
+  openSheet(`<h3>${id ? 'Varlığı düzenle' : 'Varlık ekle'}</h3>
+    <label class="f">Tür</label>
+    <div class="seg" id="segCls">${Object.keys(CLS).map(k => `<button type="button" data-cls="${k}" class="${k === formCls ? 'on' : ''}">${CLS[k].label.replace(' Hisse/ETF', ' Hisse').replace('TL Nakit/Mevduat', 'TL Nakit')}</button>`).join('')}</div>
+    <div id="symWrap"><label class="f">Sembol</label><input id="fSym" autocapitalize="characters" autocomplete="off" value="${esc(h.sym)}"></div>
+    <label class="f" id="qtyLbl">Miktar</label><input id="fQty" type="number" inputmode="decimal" step="any" value="${esc(h.qty)}">
+    <div id="costWrap"><label class="f" id="costLbl">Birim maliyet</label><input id="fCost" type="number" inputmode="decimal" step="any" value="${esc(h.cost)}"></div>
+    <details><summary>Gelişmiş ▾</summary>
+      <label class="f">Haber anahtar kelimeleri (virgülle)</label><input id="fKw" placeholder="örn. Türk Hava Yolları, THY" value="${esc(h.kw || '')}">
+      <label class="f">Elle fiyat (veri alınamıyorsa)</label><input id="fMan" type="number" inputmode="decimal" step="any" placeholder="Boş bırak: otomatik" value="${esc(h.manualPrice || '')}">
+    </details>
+    <button class="btn primary block" data-act="saveH" data-id="${id || ''}" style="margin-top:16px">Kaydet</button>
+    ${id ? `<button class="btn block danger" data-act="delH" data-id="${id}">Sil</button>` : ''}
+    <button class="btn block" data-act="close">Vazgeç</button>`);
+  updateForm();
+}
+function updateForm(){
+  document.querySelectorAll('#segCls button').forEach(b => b.classList.toggle('on', b.dataset.cls === formCls));
+  const c = CLS[formCls];
+  $('#symWrap').classList.toggle('hidden', formCls === 'GOLD' || formCls === 'TRY');
+  $('#costWrap').classList.toggle('hidden', formCls === 'TRY');
+  $('#fSym').placeholder = c.hint;
+  $('#qtyLbl').textContent = formCls === 'TRY' ? 'Tutar (TL)' : formCls === 'GOLD' ? 'Miktar (gram)' : formCls === 'FX' ? 'Miktar (döviz)' : formCls === 'FUND' ? 'Pay adedi' : 'Adet';
+  $('#costLbl').textContent = formCls === 'US' ? 'Birim alış maliyeti (USD)' : formCls === 'GOLD' ? 'Gram başı alış maliyeti (TL)' : 'Birim alış maliyeti (TL)';
+}
+function saveHolding(id){
+  const sym = formCls === 'GOLD' ? 'GRAM' : formCls === 'TRY' ? 'TL' : $('#fSym').value.trim().toUpperCase().replace(/\s+/g, '');
+  const qty = parseFloat(String($('#fQty').value).replace(',', '.'));
+  const cost = formCls === 'TRY' ? 1 : parseFloat(String($('#fCost').value).replace(',', '.'));
+  const man = parseFloat(String($('#fMan').value).replace(',', '.'));
+  if(!sym || !/^[A-Z0-9.\-]{1,15}$/.test(sym)) return toast('Geçerli bir sembol gir.');
+  if(!(qty > 0)) return toast('Miktar sıfırdan büyük olmalı.');
+  if(formCls === 'FX' && !/^[A-Z]{3}$/.test(sym)) return toast('Döviz için 3 harfli kod gir (USD, EUR, GBP).');
+  const rec = {id:id || uid(), cls:formCls, sym, qty, cost:cost > 0 ? cost : null, kw:$('#fKw').value.trim(), manualPrice:man > 0 ? man : null};
+  if(id) holdings = holdings.map(x => x.id === id ? rec : x); else holdings.push(rec);
+  store.set('holdings', holdings); closeSheet();
+  computeAll(); renderAll(); refresh();
+}
+
+/* ================= Claude'a sor ================= */
+function buildPrompt(){
+  const demo = !settings.workerUrl;
+  const now = new Date();
+  const curOf = cl => CLS[cl].cur === 'USD' ? '$' : '₺';
+  const nameOf = (cl, sym) => cl === 'GOLD' ? 'Gram Altın' : cl === 'FX' ? sym + '/TRY' : sym;
+  const tech = (o, cur) => {
+    if(!o || o.insufficient) return 'teknik veri yetersiz';
+    let s = `fiyat ${fmtPx(o.p)}${cur}, SMA50 ${fmtPx(o.s50)}, SMA200 ${fmtPx(o.s200)}, RSI14 ${o.R.toFixed(0)}, getiri 1a ${pct(o.r1)} / 3a ${pct(o.r3)} / 6a ${pct(o.r6)}, Pusula puanı ${o.s > 0 ? '+' : ''}${o.s}/6 (${o.label})`;
+    if(o.d !== 0 && o.age != null) s += o.age === 0 ? ', sinyal bugün yeni oluştu' : `, sinyal ${o.age >= 30 ? '30+' : o.age} işlem günüdür aynı yönde`;
+    if(o.hit != null) s += `, bu sinyalin 2 yıllık geçmiş isabeti %${pc(o.hit)} (taban %${pc(o.d === 1 ? o.bt.baseUp : 1 - o.bt.baseUp)})`;
+    return s;
+  };
+  let t = `Sen deneyimli bir portföy yöneticisi ve piyasa analistisin. Benim için kapsamlı bir piyasa ve portföy analizi yap ve net AL / SAT / TUT kararları ver.
+
+Tarih: ${now.toLocaleString('tr-TR')} (Türkiye saati).${demo ? '\nUYARI: Aşağıdaki fiyatlar uygulamanın DEMO verisidir, gerçek değildir. Güncel fiyatları web\'den kendin kontrol et.' : ' Aşağıdaki fiyatlar ücretsiz kaynaklardan ~15 dk gecikmeli alınmıştır.'}
+
+## Çalışma şekli
+1. ÖNCE web'de araştır: bugünkü ve bu haftaki önemli piyasa gelişmeleri (TCMB ve Fed faiz beklentileri, enflasyon verileri, USD/TRY, altın, BIST 100, ABD endeksleri, jeopolitik gelişmeler, bilanço dönemi). Portföyümdeki ve aday listesindeki varlıklarla ilgili son haberleri, KAP açıklamalarını, bilanço sonuçlarını ve analist görüşlerini kontrol et. Fiyatları da doğrula; benim verdiğim veriyle çelişirse güncel olanı kullan ve belirt.
+2. Her varlık için teknik (trend, ortalamalar, RSI, destek/direnç, hacim), temel (değerleme, kârlılık, sektör, bilanço) ve haber/makro değerlendirmesini birleştir.
+3. Portföyümün bütününü değerlendir: dağılım, yoğunlaşma, kur ve enflasyon riski, hedef dağılımıma uzaklık.
+
+## Portföyüm (toplam ${fmtTRY(totals.tot)}, maliyete göre getiri ${pct(totals.pl)})
+`;
+  rows.forEach(r => {
+    const c = curOf(r.h.cls);
+    t += `- ${nameOf(r.h.cls, String(r.h.sym).toUpperCase())} [${CLS[r.h.cls].label}] — miktar ${fmtNum(r.h.qty, 4)}, birim maliyet ${r.h.cost ? fmtPx(r.h.cost) + c : '-'}, ağırlık %${pc(r.weight)}, K/Z ${pct(r.pl)}`;
+    if(r.h.cls !== 'TRY') t += `\n  Teknik: ${tech(r.o, c)}`;
+    t += '\n';
+  });
+  t += `\nHedef dağılımım: ${Object.keys(CLS).map(k => CLS[k].label + ' %' + (settings.targets[k] || 0)).join(', ')}
+Şu anki dağılım: ${Object.keys(CLS).map(k => CLS[k].label + ' %' + pc(byCls[k] || 0)).join(', ')}
+
+## Piyasa geneli
+`;
+  market.forEach(m => t += `- ${m.name}: ${tech(m.o, m.key === 'y:^GSPC' ? '' : '')}\n`);
+  if(rules.length){
+    t += `\n## Pusula'nın kural tabanlı uyarıları\n`;
+    rules.filter(r => r.lvl !== 'ok').forEach(r => t += `- ${r.title}: ${r.text}\n`);
+  }
+  const cand = [];
+  const fresh = scanRes.filter(r => !r.owned && r.o.d === 1 && r.o.age != null && r.o.age <= 5).sort(rankScan).slice(0, 8);
+  const strong = scanRes.filter(r => !r.owned && r.o.d === 1 && !fresh.includes(r)).sort(rankScan).slice(0, 10);
+  fresh.forEach(r => cand.push([r, 'yeni yükseliş sinyali']));
+  strong.forEach(r => cand.push([r, 'güçlü trend']));
+  if(cand.length){
+    t += `\n## Portföyümde olmayan aday varlıklar (Pusula tarayıcısı, ${scanRes.length} varlık tarandı)\n`;
+    cand.forEach(([r, why]) => t += `- ${nameOf(r.cls, r.sym)} [${CLS[r.cls].label}] (${why}${r.src ? ', kaynak: ' + r.src : ''}): ${tech(r.o, curOf(r.cls))}\n`);
+  } else {
+    t += `\n## Aday varlıklar\nUygulamada henüz fırsat taraması yapılmadı. Sen BIST, ABD hisse/ETF, döviz, altın ve TEFAS fonları arasından güncel koşullarda öne çıkan 5-8 adayı kendin araştırıp öner.\n`;
+  }
+  const mine = new Set(); rows.forEach(r => r.news.forEach(n => mine.add(n)));
+  const top = [...mine, ...news.filter(n => !mine.has(n))].slice(0, 20);
+  if(top.length && !newsDemo){ t += `\n## Uygulamanın topladığı son başlıklar (başlangıç noktası; kendin de araştır)\n`; top.forEach(n => t += `- ${n.title} (${n.source || ''}${n.time ? ', ' + new Date(n.time).toLocaleDateString('tr-TR') : ''})\n`); }
+  t += `
+## Yanıt biçimi (Türkçe)
+1. **Piyasa özeti** (5-8 madde): Bugün piyasayı etkileyen en önemli gelişmeler ve beklentiler; kaynaklarıyla.
+2. **Karar tablosu**: Portföyümdeki her varlık ve önerdiğin her aday için bir satır. Sütunlar: Varlık | Karar (AL / SAT / TUT / AZALT / EKLE) | Güven (düşük/orta/yüksek) | Giriş veya işlem bölgesi | Hedef fiyat | Zarar-durdur | Vade (kısa/orta/uzun) | Tek cümle gerekçe.
+3. **Detaylı gerekçeler**: Her karar için teknik + temel + haber/makro gerekçesi ve kararı değiştirecek gelişmeler.
+4. **Yeni alım önerileri**: Portföyümde olmayan en iyi 3-5 fırsat; neden şimdi, ne kadar ayırmalıyım (toplam portföyün yüzdesi olarak ve yaklaşık TL tutarı olarak).
+5. **Portföy eylem planı**: Somut adımlar ve sırası (ör. "X'ten ₺Y sat, Z'ye ₺W ekle"). Hedef dağılımımı da dikkate al.
+6. **Riskler ve izlenecek takvim**: Önümüzdeki 2 haftadaki kritik veriler/toplantılar ve en büyük riskler.
+
+Kurallar: Net ol, "duruma göre değişir" diye kaçma; her karara bir güven seviyesi ver. Emin olmadığın yerde bunu güven seviyesinde göster. Rakamları uydurma; bulamadığın veriyi "bulunamadı" diye belirt. Tek bir varlığa portföyün %20'sinden fazlasını önermeden önce bunun riskini açıkla.
+`;
+  return t;
+}
+async function copyText(s){
+  try{ await navigator.clipboard.writeText(s); return true; }
+  catch(e){ const ta = document.createElement('textarea'); ta.value = s; document.body.appendChild(ta); ta.select(); let ok = false; try{ ok = document.execCommand('copy'); }catch(_){} ta.remove(); return ok; }
+}
+async function askClaude(){
+  const p = buildPrompt(); const ok = await copyText(p);
+  openSheet(`<h3>Claude ile AL / SAT analizi</h3>
+    <ol class="small" style="padding-left:20px;margin:6px 0 10px;color:var(--muted)">
+      <li>${ok ? '<b style="color:var(--up)">Analiz talimatı panoya kopyalandı.</b>' : 'Aşağıdaki metnin tamamını kopyala.'}</li>
+      <li>Aşağıdaki düğmeyle claude.ai'yi aç ve yeni sohbet başlat.</li>
+      <li>Web aramasının açık olduğundan emin ol, metni yapıştır ve gönder.</li>
+    </ol>
+    <p class="muted tiny">Claude güncel haberleri araştırıp her varlık için karar tablosu, hedef ve zarar-durdur seviyeleriyle yanıt verir. Aboneliğinle ek ücret yok. ${scanRes.length ? '' : 'İpucu: önce Fırsatlar sekmesinde tarama yaparsan yeni adaylar da analize eklenir.'}</p>
+    <textarea readonly>${esc(p)}</textarea>
+    <a class="btn primary block" style="text-align:center;text-decoration:none;color:#08101f" href="https://claude.ai/new" target="_blank" rel="noopener">claude.ai'yi aç</a>
+    <button class="btn block" data-act="copyAgain">Tekrar kopyala</button><button class="btn block" data-act="close">Kapat</button>`);
+}
+
+/* ================= Diğer işlemler ================= */
+function loadDemo(){
+  if(holdings.length && !confirmInline()) return;
+  holdings = [
+    {id:uid(), cls:'BIST', sym:'THYAO', qty:120, cost:285, kw:'Türk Hava Yolları, THY'},
+    {id:uid(), cls:'BIST', sym:'ASELS', qty:200, cost:96, kw:'Aselsan'},
+    {id:uid(), cls:'US', sym:'VOO', qty:6, cost:520, kw:'S&P 500'},
+    {id:uid(), cls:'US', sym:'AAPL', qty:12, cost:205, kw:'Apple'},
+    {id:uid(), cls:'FUND', sym:'TTE', qty:9000, cost:2.6, kw:''},
+    {id:uid(), cls:'FX', sym:'USD', qty:1500, cost:38.5, kw:''},
+    {id:uid(), cls:'GOLD', sym:'GRAM', qty:40, cost:4300, kw:''},
+    {id:uid(), cls:'TRY', sym:'TL', qty:40000, cost:1, kw:''}
+  ];
+  store.set('holdings', holdings); computeAll(); renderAll(); refresh(); switchTab('portfoy');
+  toast('Örnek portföy yüklendi. Düzenlemek için bir varlığa dokun.');
+}
+let pendingConfirm = 0;
+function confirmInline(){ // iki kez dokunma ile onay (tarayıcı diyaloğu kullanmadan)
+  if(Date.now() - pendingConfirm < 4000){ pendingConfirm = 0; return true; }
+  pendingConfirm = Date.now(); toast('Mevcut verilerin üzerine yazılacak. Onaylamak için tekrar dokun.'); return false;
+}
+function exportData(){
+  const data = JSON.stringify({app:'pusula', v:1, exported:new Date().toISOString(), holdings, settings, log:signalLog}, null, 2);
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([data], {type:'application/json'}));
+  a.download = 'pusula-yedek-' + today() + '.json'; document.body.appendChild(a); a.click(); a.remove();
+  toast('Yedek indirildi.');
+}
+function importData(file){
+  const r = new FileReader();
+  r.onload = () => {
+    try{
+      const j = JSON.parse(r.result);
+      if(j.app !== 'pusula' || !Array.isArray(j.holdings)) throw new Error();
+      holdings = j.holdings.filter(h => h && CLS[h.cls] && h.qty > 0).map(h => ({...h, id:h.id || uid()}));
+      if(j.settings) settings = Object.assign(settings, {targets:j.settings.targets || settings.targets, workerUrl:j.settings.workerUrl ?? settings.workerUrl});
+      if(Array.isArray(j.log)) signalLog = j.log;
+      store.set('holdings', holdings); store.set('settings', settings); store.set('log', signalLog);
+      toast('Yedek geri yüklendi.'); refresh();
+    }catch(e){ toast('Dosya okunamadı. Pusula yedeği olduğundan emin ol.'); }
+  };
+  r.readAsText(file);
+}
+async function testUrl(){
+  const u = $('#wUrl').value.trim().replace(/\/+$/, '');
+  if(!/^https:\/\//.test(u)) return toast('Adres https:// ile başlamalı.');
+  toast('Test ediliyor…');
+  try{
+    const r = await fetch(u + '/history?range=1y&s=USDTRY%3DX'); const j = await r.json();
+    if(j.error) throw new Error(j.error);
+    toast(`Bağlantı çalışıyor. USD/TRY: ${fmtPx(j.price)}`);
+  }catch(e){ toast('Bağlanamadı: ' + e.message, 4500); }
+}
+function switchTab(t){
+  document.querySelectorAll('.tab').forEach(s => s.classList.toggle('active', s.id === 'tab-' + t));
+  document.querySelectorAll('.tabbar button').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
+  window.scrollTo(0, 0);
+  if(t === 'tarama' && !scanTime && !scanning) runScan();
+}
+
+document.addEventListener('click', e => {
+  const tb = e.target.closest('[data-tab]'); if(tb){ switchTab(tb.dataset.tab); return; }
+  const tg = e.target.closest('[data-tab-go]'); if(tg){ e.preventDefault(); switchTab(tg.dataset.tabGo); return; }
+  const ed = e.target.closest('[data-edit]'); if(ed){ openForm(ed.dataset.edit); return; }
+  const cb = e.target.closest('[data-cls]'); if(cb){ formCls = cb.dataset.cls; updateForm(); return; }
+  const nfb = e.target.closest('[data-nf]'); if(nfb){ newsFilter = nfb.dataset.nf; renderNews(); return; }
+  const sfb = e.target.closest('[data-sf]'); if(sfb){ scanFilter = sfb.dataset.sf; renderScan(); return; }
+  const ab = e.target.closest('[data-add-cls]'); if(ab){ openForm(null, {cls:ab.dataset.addCls, sym:ab.dataset.addSym}); return; }
+  const a = e.target.closest('[data-act]'); if(!a) return;
+  const act = a.dataset.act;
+  if(act === 'add') openForm(null);
+  else if(act === 'close') closeSheet();
+  else if(act === 'saveH') saveHolding(a.dataset.id || null);
+  else if(act === 'delH'){ if(confirmInline()){ holdings = holdings.filter(x => x.id !== a.dataset.id); store.set('holdings', holdings); closeSheet(); computeAll(); renderAll(); } }
+  else if(act === 'demo') loadDemo();
+  else if(act === 'claude') askClaude();
+  else if(act === 'scan') runScan();
+  else if(act === 'saveScan'){ settings.extraBist = $('#scBist').value; settings.extraUs = $('#scUs').value; settings.scanFunds = $('#scFund').value; store.set('settings', settings); scanRes = []; scanTime = null; toast('Kaydedildi. Bir sonraki taramada eklenecek.'); renderScan(); }
+  else if(act === 'copyAgain') copyText(buildPrompt()).then(ok => toast(ok ? 'Kopyalandı.' : 'Kopyalanamadı; metni elle seç.'));
+  else if(act === 'saveUrl'){
+    const u = $('#wUrl').value.trim().replace(/\/+$/, '');
+    if(u && !/^https:\/\//.test(u)) return toast('Adres https:// ile başlamalı.');
+    settings.workerUrl = u; store.set('settings', settings); series = {}; scanRes = []; scanTime = null; store.del('seenUp'); store.del('lastScan'); toast(u ? 'Kaydedildi, gerçek veriler alınıyor…' : 'Demo moda geçildi.'); refresh();
+  }
+  else if(act === 'testUrl') testUrl();
+  else if(act === 'export') exportData();
+  else if(act === 'import') $('#importFile').click();
+  else if(act === 'reset'){ if(confirmInline()){ Object.keys(mem).forEach(k => store.del(k)); try{ Object.keys(localStorage).filter(k => k.startsWith('pusula.')).forEach(k => localStorage.removeItem(k)); }catch(_){} holdings = []; signalLog = []; series = {}; settings.workerUrl = ''; toast('Tüm veriler silindi.'); refresh(); } }
+});
+document.addEventListener('input', e => {
+  const k = e.target.dataset && e.target.dataset.target;
+  if(k){ settings.targets[k] = Math.max(0, Math.min(100, +e.target.value || 0)); store.set('settings', settings);
+    const s = Object.values(settings.targets).reduce((a, b) => a + (+b || 0), 0); const el = $('#tsum');
+    el.textContent = `Toplam: %${s}${s === 100 ? '' : ' (100 olmalı)'}`; el.className = 'small ' + (s === 100 ? 'muted' : 'warn');
+    computeAll(); renderPortfolio(); }
+});
+document.addEventListener('change', e => { if(e.target.id === 'importFile' && e.target.files[0]) importData(e.target.files[0]); });
+$('#refreshBtn').addEventListener('click', () => { Object.keys(series).forEach(k => store.del('cache:' + k)); refresh(); });
+document.addEventListener('visibilitychange', () => { if(!document.hidden && lastUpdate && Date.now() - lastUpdate > 15*60e3) refresh(); });
+
+if('serviceWorker' in navigator && location.protocol === 'https:'){
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+computeAll(); renderAll();
+refresh().then(() => {
+  // Uygulama her açıldığında, son taramadan 4 saat geçtiyse yeni fırsatları arka planda tara
+  if(settings.workerUrl && Date.now() - store.get('lastScan', 0) > 4*36e5) runScan();
+});
+</script>
+</body>
+</html>
