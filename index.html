@@ -216,6 +216,10 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 const nf = d => new Intl.NumberFormat('tr-TR', {minimumFractionDigits:d, maximumFractionDigits:d});
 const fmtNum = (v, d=2) => v==null || isNaN(v) ? '—' : new Intl.NumberFormat('tr-TR', {maximumFractionDigits:d}).format(v);
 const fmtTRY = v => v==null || isNaN(v) ? '—' : '₺' + (Math.abs(v) >= 1000 ? nf(0) : nf(2)).format(v);
+const fmtUSD = v => v==null || isNaN(v) ? '—' : '$' + (Math.abs(v) >= 1000 ? nf(0) : nf(2)).format(v);
+// Görüntüleme para birimi: TL tutarı, seçime göre TL ya da bugünkü kurla dolar olarak yazılır
+const inUsd = () => settings.dispCur === 'USD' && !!usdtry();
+const fmtV = v => inUsd() ? fmtUSD(v == null ? v : v / usdtry()) : fmtTRY(v);
 const fmtPx = v => v==null ? '—' : (Math.abs(v) >= 1000 ? nf(0) : Math.abs(v) >= 10 ? nf(2) : nf(4)).format(v);
 const pct = v => v==null || isNaN(v) ? '—' : (v >= 0 ? '+' : '−') + '%' + nf(1).format(Math.abs(v)*100);
 const pc = v => fmtNum((v||0)*100, 0);
@@ -455,19 +459,19 @@ function portfolioRules(tot){
     return R;
   }
   rows.forEach(a => {
-    if(a.weight > 0.25 && a.h.cls !== 'TRY') R.push({lvl:'warn', title:`${a.h.sym}: tek varlıkta yoğunlaşma`, text:`Portföyün %${pc(a.weight)}'i bu varlıkta. Sert bir düşüş tüm portföyü etkiler; tek varlık için genelde %10-20 üstü riskli kabul edilir.`});
+    if(a.weight > 0.25 && a.h.cls !== 'TRY') R.push({lvl:'warn', title:`${dispName(a.h.cls, a.h.sym)}: tek varlıkta yoğunlaşma`, text:`Portföyün %${pc(a.weight)}'i bu varlıkta. Sert bir düşüş tüm portföyü etkiler; tek varlık için genelde %10-20 üstü riskli kabul edilir.`});
   });
   const hedge = (byCls.FX||0) + (byCls.GOLD||0) + (byCls.US||0) + (byCls.COM||0);
   if(hedge < 0.2) R.push({lvl:'warn', title:'Kur ve enflasyon koruması zayıf', text:`Döviz, altın, emtia ve ABD varlıklarının toplam payı %${pc(hedge)}. TL'deki değer kaybına karşı koruman düşük.`});
   if(hedge > 0.85) R.push({lvl:'info', title:'Neredeyse tamamen döviz/altın', text:`Payı %${pc(hedge)}. Kur sakin kalırsa veya TL reel getirisi yüksek olursa geride kalabilirsin.`});
   rows.forEach(a => {
-    if(a.o && a.o.d === -1 && a.weight > 0.1) R.push({lvl:'warn', title:`${a.h.sym}: düşüş eğiliminde`, text:`Portföyün %${pc(a.weight)}'i ve teknik görünüm zayıf (sinyal güveni: ${a.o.conf.t.toLowerCase()}).`});
-    if(a.pl != null && a.pl > 0.5 && a.o && a.o.R > 70) R.push({lvl:'info', title:`${a.h.sym}: yüksek kâr + aşırı alım`, text:`Maliyetine göre %${pc(a.pl)} kârda ve RSI ${a.o.R.toFixed(0)}. Kademeli kâr almayı düşünebilirsin.`});
-    if(a.pl != null && a.pl < -0.25) R.push({lvl:'info', title:`${a.h.sym}: büyük zarar`, text:`Maliyetine göre %${pc(-a.pl)} zararda. Pozisyonu tutma gerekçeni gözden geçir.`});
+    if(a.o && a.o.d === -1 && a.weight > 0.1) R.push({lvl:'warn', title:`${dispName(a.h.cls, a.h.sym)}: düşüş eğiliminde`, text:`Portföyün %${pc(a.weight)}'i ve teknik görünüm zayıf (sinyal güveni: ${a.o.conf.t.toLowerCase()}).`});
+    if(a.pl != null && a.pl > 0.5 && a.o && a.o.R > 70) R.push({lvl:'info', title:`${dispName(a.h.cls, a.h.sym)}: yüksek kâr + aşırı alım`, text:`Maliyetine göre %${pc(a.pl)} kârda ve RSI ${a.o.R.toFixed(0)}. Kademeli kâr almayı düşünebilirsin.`});
+    if(a.pl != null && a.pl < -0.25) R.push({lvl:'info', title:`${dispName(a.h.cls, a.h.sym)}: büyük zarar`, text:`Maliyetine göre %${pc(-a.pl)} zararda. Pozisyonu tutma gerekçeni gözden geçir.`});
   });
   Object.keys(CLS).forEach(k => {
     const t = (pf.targets[k] || 0)/100, cur = byCls[k] || 0, diff = cur - t;
-    if(Math.abs(diff) >= 0.05) R.push({lvl:'info', title:`${CLS[k].label}: hedefin ${diff > 0 ? 'üstünde' : 'altında'}`, text:`Şu an %${pc(cur)}, hedefin %${pc(t)}. Dengelemek için yaklaşık ${fmtTRY(Math.abs(diff)*tot)} ${diff > 0 ? 'azaltılabilir' : 'eklenebilir'}.`});
+    if(Math.abs(diff) >= 0.05) R.push({lvl:'info', title:`${CLS[k].label}: hedefin ${diff > 0 ? 'üstünde' : 'altında'}`, text:`Şu an %${pc(cur)}, hedefin %${pc(t)}. Dengelemek için yaklaşık ${fmtV(Math.abs(diff)*tot)} ${diff > 0 ? 'azaltılabilir' : 'eklenebilir'}.`});
   });
   if(!R.some(r => r.lvl === 'warn')) R.unshift({lvl:'ok', title:'Belirgin bir risk uyarısı yok', text:'Dağılım ve pozisyonlar kurallara göre dengeli görünüyor.'});
   const ord = {warn:0, info:1, ok:2};
@@ -612,12 +616,14 @@ function renderPortfolio(){
   const t = totals;
   let h = `<div class="card">
     <div class="muted small">${esc(pf.name)}${isBes() ? (pf.company ? ' · ' + esc(pf.company) : '') + ' · toplam birikim' : ' · toplam değer'}</div>
-    <div class="big">${fmtTRY(t.tot)}</div>
+    <div class="row between"><div class="big">${fmtV(t.tot)}</div>
+      <div class="seg" style="grid-template-columns:1fr 1fr;width:96px;gap:4px"><button type="button" data-dcur="TRY" class="${inUsd() ? '' : 'on'}" style="padding:6px 0">₺</button><button type="button" data-dcur="USD" class="${inUsd() ? 'on' : ''}" style="padding:6px 0">$</button></div></div>
     <div class="kpis">
-      <div><span class="muted tiny">Kâr / zarar</span><b class="${cls(t.pl)}">${t.plAbs != null ? (t.plAbs >= 0 ? '+' : '−') + fmtTRY(Math.abs(t.plAbs)) : '—'}</b></div>
+      <div><span class="muted tiny">Kâr / zarar</span><b class="${cls(t.pl)}">${t.plAbs != null ? (t.plAbs >= 0 ? '+' : '−') + fmtV(Math.abs(t.plAbs)) : '—'}</b></div>
       <div><span class="muted tiny">Getiri</span><b class="${cls(t.pl)}">${pct(t.pl)}</b></div>
-      <div><span class="muted tiny">Dolar karşılığı</span><b>${t.usd != null ? '$' + fmtNum(t.usd, 0) : '—'}</b></div>
+      <div><span class="muted tiny">${inUsd() ? 'TL karşılığı' : 'Dolar karşılığı'}</span><b>${inUsd() ? fmtTRY(t.tot) : (t.usd != null ? fmtUSD(t.usd) : '—')}</b></div>
     </div>
+    ${inUsd() ? `<div class="muted tiny" style="margin-top:8px">Tutarlar bugünkü kurla (USD/TRY ${fmtPx(usdtry())}) dolara çevrildi.</div>` : ''}
     ${isBes() ? '' : '<div class="muted tiny" style="margin-top:8px">ABD varlıklarının TL maliyeti bugünkü kurla hesaplanır; getirileri dolar bazındadır.</div>'}
   </div>`;
   if(isBes()) h += contribCard();
@@ -644,7 +650,7 @@ function renderPortfolio(){
       <span class="dot" style="background:${c.color}"></span>
       <div class="grow"><div class="row" style="gap:8px"><b class="ellip">${esc(dispName(r.h.cls, r.h.sym))}</b>${r.h.dk ? '<span class="tag">Devlet katkısı</span>' : ''}${r.h.cls !== 'TRY' ? `<span class="pill ${pillCls(r.o)}">${pillTxt(r.o)}</span>` : ''}</div>
         <div class="muted small ellip">${c.label} · ${fmtNum(r.h.qty, 4)} ${r.h.cls === 'TRY' ? 'TL' : r.h.cls === 'GOLD' ? 'gr' : r.h.cls === 'COM' ? (COMS[r.h.sym] ? COMS[r.h.sym].unit : '') : r.h.cls === 'BES' || r.h.cls === 'FUND' ? 'pay' : 'adet'}${r.price != null && r.h.cls !== 'TRY' ? ' · ' + fmtPx(r.price) + curSym(r.h.cls, r.h.sym) : ''}${r.h.manualPrice ? ' (elle)' : ''}</div></div>
-      <div class="right"><b>${fmtTRY(r.valueTRY)}</b><div class="small ${cls(r.pl)}">${r.pl != null ? pct(r.pl) : '%' + pc(r.weight)}</div></div></div>`;
+      <div class="right"><b>${fmtV(r.valueTRY)}</b>${!inUsd() && curOfH(r.h.cls, r.h.sym) === 'USD' && r.valueTRY != null && usdtry() ? `<div class="tiny muted">${fmtUSD(r.valueTRY / usdtry())}</div>` : ''}<div class="small ${cls(r.pl)}">${r.pl != null ? pct(r.pl) : '%' + pc(r.weight)}</div></div></div>`;
   });
   h += `</div></div><p class="muted tiny" style="text-align:center;padding:0 10px">Pusula kişisel bilgilendirme aracıdır, yatırım danışmanlığı değildir. Kararlar ve sorumluluk sana aittir.</p>`;
   el.innerHTML = h;
@@ -1247,6 +1253,7 @@ document.addEventListener('click', e => {
   const pfb = e.target.closest('[data-pf]'); if(pfb){ switchPf(pfb.dataset.pf); return; }
   const pkb = e.target.closest('[data-pkind]'); if(pkb){ document.querySelectorAll('#pKind button').forEach(b => b.classList.toggle('on', b === pkb)); $('#pCompWrap').classList.toggle('hidden', pkb.dataset.pkind !== 'bes'); return; }
   const qmb = e.target.closest('[data-qmode]'); if(qmb){ document.querySelectorAll('[data-qmode]').forEach(b => b.classList.toggle('on', b === qmb)); updateForm(); return; }
+  const dcb = e.target.closest('[data-dcur]'); if(dcb){ settings.dispCur = dcb.dataset.dcur; store.set('settings', settings); computeAll(); renderPortfolio(); return; }
   const sfb = e.target.closest('[data-sf]'); if(sfb){ scanFilter = sfb.dataset.sf; renderScan(); return; }
   const ab = e.target.closest('[data-add-cls]'); if(ab){ openForm(null, {cls:ab.dataset.addCls, sym:ab.dataset.addSym}); return; }
   const a = e.target.closest('[data-act]'); if(!a) return;
