@@ -219,6 +219,57 @@ const fmtTRY = v => v==null || isNaN(v) ? '—' : '₺' + (Math.abs(v) >= 1000 ?
 const fmtUSD = v => v==null || isNaN(v) ? '—' : '$' + (Math.abs(v) >= 1000 ? nf(0) : nf(2)).format(v);
 // Görüntüleme para birimi: TL tutarı, seçime göre TL ya da bugünkü kurla dolar olarak yazılır
 const inUsd = () => settings.dispCur === 'USD' && !!usdtry();
+/* ---- Dönemsel değişim (günlük, haftalık, aylık...) ---- */
+const PERIODS = [['pl', 'K/Z'], ['1d', '1G'], ['1w', '1H'], ['1m', '1A'], ['3m', '3A'], ['ytd', 'YB'], ['1y', '1Y']];
+const PERIOD_NAMES = {pl:'maliyete göre', '1d':'günlük', '1w':'1 hafta', '1m':'1 ay', '3m':'3 ay', ytd:'yılbaşından beri', '1y':'1 yıl'};
+const curPeriod = () => settings.period || 'pl';
+function refTime(per){
+  const n = new Date(), now = Date.now();
+  switch(per){
+    case '1d': return new Date(n.getFullYear(), n.getMonth(), n.getDate()).getTime() - 1; // dünkü kapanış
+    case '1w': return now - 7*864e5;
+    case '1m': return now - 30*864e5;
+    case '3m': return now - 91*864e5;
+    case 'ytd': return new Date(n.getFullYear(), 0, 1).getTime() - 1;
+    case '1y': return now - 365*864e5;
+  }
+  return null;
+}
+// t anındaki (veya hemen öncesindeki) kapanış fiyatı
+function closeAt(s, t){
+  if(!s || !s.closes || !s.closes.length || t == null) return null;
+  let v = null;
+  for(const [ts, c] of s.closes){ if(ts <= t) v = c; else break; }
+  return v;
+}
+// Bir varlığın dönem değişimi: yüzde (kendi para biriminde) ve TL/USD tutar etkisi. Miktar dönem boyunca sabit varsayılır.
+// Günlük değişim: son kapanışın gününden önceki kapanışa göre (piyasa henüz açılmadıysa önceki günün hareketi)
+const dayStartOf = s => { const l = s && s.closes && s.closes.length ? s.closes[s.closes.length - 1][0] : Date.now(); const d = new Date(l); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() - 1; };
+const refFor = (s, per) => per === '1d' ? dayStartOf(s) : refTime(per);
+function periodChange(r, per){
+  if(refTime(per) == null) return null;
+  const fxS = series['y:USDTRY=X'], fxNow = usdtry(), fx0 = closeAt(fxS, refFor(fxS, per));
+  const t = refFor(r.s, per);
+  if(r.h.cls === 'TRY') return r.valueTRY == null ? null : {pct:0, nowTRY:r.valueTRY, pastTRY:r.valueTRY, fx0};
+  if(r.h.manualPrice || !r.s || r.price == null) return null;
+  const p0 = closeAt(r.s, t); if(!p0) return null;
+  const usd = curOfH(r.h.cls, r.h.sym) === 'USD';
+  if(usd && (!fxNow || !fx0)) return null;
+  const nowTRY = r.h.qty * r.price * (usd ? fxNow : 1), pastTRY = r.h.qty * p0 * (usd ? fx0 : 1);
+  return {pct:r.price/p0 - 1, nowTRY, pastTRY, fx0};
+}
+function portfolioChange(per){
+  let now = 0, past = 0, nowU = 0, pastU = 0, miss = 0;
+  const fxNow = usdtry();
+  rows.forEach(r => {
+    const c = periodChange(r, per);
+    if(!c){ if(r.valueTRY) miss++; return; }
+    now += c.nowTRY; past += c.pastTRY;
+    if(fxNow && c.fx0){ nowU += c.nowTRY/fxNow; pastU += c.pastTRY/c.fx0; }
+  });
+  if(!past) return null;
+  return inUsd() && pastU ? {abs:(nowU - pastU)*fxNow, pct:nowU/pastU - 1, miss} : {abs:now - past, pct:now/past - 1, miss};
+}
 const fmtV = v => inUsd() ? fmtUSD(v == null ? v : v / usdtry()) : fmtTRY(v);
 const fmtPx = v => v==null ? '—' : (Math.abs(v) >= 1000 ? nf(0) : Math.abs(v) >= 10 ? nf(2) : nf(4)).format(v);
 const pct = v => v==null || isNaN(v) ? '—' : (v >= 0 ? '+' : '−') + '%' + nf(1).format(Math.abs(v)*100);
@@ -619,11 +670,17 @@ function renderPortfolio(){
     <div class="muted small">${esc(pf.name)}${isBes() ? (pf.company ? ' · ' + esc(pf.company) : '') + ' · toplam birikim' : ' · toplam değer'}</div>
     <div class="row between"><div class="big">${fmtV(t.tot)}</div>
       <div class="seg" style="grid-template-columns:1fr 1fr;width:96px;gap:4px"><button type="button" data-dcur="TRY" class="${inUsd() ? '' : 'on'}" style="padding:6px 0">₺</button><button type="button" data-dcur="USD" class="${inUsd() ? 'on' : ''}" style="padding:6px 0">$</button></div></div>
-    <div class="kpis">
-      <div><span class="muted tiny">Kâr / zarar</span><b class="${cls(t.pl)}">${t.plAbs != null ? (t.plAbs >= 0 ? '+' : '−') + fmtV(Math.abs(t.plAbs)) : '—'}</b></div>
-      <div><span class="muted tiny">Getiri</span><b class="${cls(t.pl)}">${pct(t.pl)}</b></div>
+    <div class="chips" style="flex-wrap:nowrap;overflow-x:auto;margin:10px 0 0;gap:5px">${PERIODS.map(([k, l]) => `<button class="chip ${curPeriod() === k ? 'on' : ''}" data-per="${k}" style="padding:5px 10px;font-size:12.5px">${l}</button>`).join('')}</div>
+    <div class="kpis">${(() => {
+      if(curPeriod() === 'pl') return `<div><span class="muted tiny">Kâr / zarar</span><b class="${cls(t.pl)}">${t.plAbs != null ? (t.plAbs >= 0 ? '+' : '−') + fmtV(Math.abs(t.plAbs)) : '—'}</b></div>
+      <div><span class="muted tiny">Getiri</span><b class="${cls(t.pl)}">${pct(t.pl)}</b></div>`;
+      const pc_ = portfolioChange(curPeriod());
+      return `<div><span class="muted tiny">Değişim · ${PERIOD_NAMES[curPeriod()]}</span><b class="${cls(pc_ && pc_.abs)}">${pc_ ? (pc_.abs >= 0 ? '+' : '−') + fmtV(Math.abs(pc_.abs)) : '—'}</b></div>
+      <div><span class="muted tiny">Yüzde</span><b class="${cls(pc_ && pc_.pct)}">${pc_ ? pct(pc_.pct) : '—'}</b></div>`;
+    })()}
       <div><span class="muted tiny">${inUsd() ? 'TL karşılığı' : 'Dolar karşılığı'}</span><b>${inUsd() ? fmtTRY(t.tot) : (t.usd != null ? fmtUSD(t.usd) : '—')}</b></div>
     </div>
+    ${curPeriod() !== 'pl' ? `<div class="muted tiny" style="margin-top:8px">Dönem değişimi mevcut miktarlarınla hesaplanır (alım-satım ve katkılar hariç)${(portfolioChange(curPeriod()) || {}).miss ? '; fiyat geçmişi olmayan varlıklar dahil edilmedi' : ''}.</div>` : ''}
     ${inUsd() ? `<div class="muted tiny" style="margin-top:8px">Tutarlar bugünkü kurla (USD/TRY ${fmtPx(usdtry())}) dolara çevrildi.</div>` : ''}
     ${isBes() ? '' : '<div class="muted tiny" style="margin-top:8px">ABD varlıklarının TL maliyeti bugünkü kurla hesaplanır; getirileri dolar bazındadır.</div>'}
   </div>`;
@@ -652,7 +709,7 @@ function renderPortfolio(){
       <span class="dot" style="background:${c.color}"></span>
       <div class="grow"><div class="row" style="gap:8px"><b class="ellip">${esc(dispName(r.h.cls, r.h.sym))}</b>${r.h.dk ? '<span class="tag">Devlet katkısı</span>' : ''}${r.h.cls !== 'TRY' ? `<span class="pill ${pillCls(r.o)}">${pillTxt(r.o)}</span>` : ''}${nw ? `<span class="warn small" style="font-weight:700">⚠ ${nw}</span>` : ''}</div>
         <div class="muted small ellip">${c.label} · ${fmtNum(r.h.qty, 4)} ${r.h.cls === 'TRY' ? 'TL' : r.h.cls === 'GOLD' ? 'gr' : r.h.cls === 'COM' ? (COMS[r.h.sym] ? COMS[r.h.sym].unit : '') : r.h.cls === 'BES' || r.h.cls === 'FUND' ? 'pay' : 'adet'}${r.price != null && r.h.cls !== 'TRY' ? ' · ' + fmtPx(r.price) + curSym(r.h.cls, r.h.sym) : ''}${r.h.manualPrice ? ' (elle)' : ''}</div></div>
-      <div class="right"><b>${fmtV(r.valueTRY)}</b>${!inUsd() && curOfH(r.h.cls, r.h.sym) === 'USD' && r.valueTRY != null && usdtry() ? `<div class="tiny muted">${fmtUSD(r.valueTRY / usdtry())}</div>` : ''}<div class="small ${cls(r.pl)}">${r.pl != null ? pct(r.pl) : '%' + pc(r.weight)}</div></div><span class="muted" style="margin-left:-4px">›</span></div>`;
+      <div class="right"><b>${fmtV(r.valueTRY)}</b>${!inUsd() && curOfH(r.h.cls, r.h.sym) === 'USD' && r.valueTRY != null && usdtry() ? `<div class="tiny muted">${fmtUSD(r.valueTRY / usdtry())}</div>` : ''}${(() => { if(curPeriod() === 'pl') return `<div class="small ${cls(r.pl)}">${r.pl != null ? pct(r.pl) : '%' + pc(r.weight)}</div>`; const c = periodChange(r, curPeriod()); return `<div class="small ${cls(c && c.pct)}">${c ? pct(c.pct) : '—'}</div>`; })()}</div><span class="muted" style="margin-left:-4px">›</span></div>`;
   });
   h += `</div><p class="muted tiny" style="margin:6px 0 0">Ayrıntılar ve o varlığa özel öneriler için bir varlığa dokun.</p></div>`;
   h += rulesCard + dist;
@@ -904,6 +961,10 @@ function openDetail(id){
       <div><span class="muted tiny">Portföydeki payı</span><b>%${pc(r.weight)}</b></div>
     </div>
     <div class="muted small" style="margin-top:8px">${fmtNum(h.qty, 4)} ${unit}${h.cost && h.cls !== 'TRY' ? ` · ortalama maliyet ${fmtPx(h.cost)}${cs}` : ''}${r.price != null && h.cls !== 'TRY' ? ` · güncel ${fmtPx(r.price)}${cs}` : ''}${h.manualPrice ? ' (elle girilen fiyat)' : ''}</div>`;
+  if(h.cls !== 'TRY'){
+    x += `<div class="sec" style="margin-left:0">Getiriler${curOfH(h.cls, h.sym) === 'USD' ? ' (dolar bazında)' : ''}</div><div class="kpis" style="grid-template-columns:repeat(3,1fr);margin-top:0">`
+      + PERIODS.filter(([k]) => k !== 'pl').map(([k]) => { const c = periodChange(r, k); return `<div><span class="muted tiny">${PERIOD_NAMES[k]}</span><b class="${cls(c && c.pct)}">${c ? pct(c.pct) : '—'}</b></div>`; }).join('') + `</div>`;
+  }
   x += `<div class="sec" style="margin-left:0">Bu varlık için yönlendirmeler</div>`;
   if(my.length) x += my.map(q => `<div class="rule"><div class="ic ${q.lvl}">${q.lvl === 'warn' ? '!' : 'i'}</div><div><b>${esc(q.title)}</b><p>${esc(q.text)}</p></div></div>`).join('');
   if(r.advice && r.advice.length) x += `<div class="adv">${r.advice.map(a => `<p>${esc(a)}</p>`).join('')}</div>`;
@@ -1322,6 +1383,7 @@ document.addEventListener('click', e => {
   const pkb = e.target.closest('[data-pkind]'); if(pkb){ document.querySelectorAll('#pKind button').forEach(b => b.classList.toggle('on', b === pkb)); $('#pCompWrap').classList.toggle('hidden', pkb.dataset.pkind !== 'bes'); return; }
   const qmb = e.target.closest('[data-qmode]'); if(qmb){ document.querySelectorAll('[data-qmode]').forEach(b => b.classList.toggle('on', b === qmb)); updateForm(); return; }
   const dcb = e.target.closest('[data-dcur]'); if(dcb){ settings.dispCur = dcb.dataset.dcur; store.set('settings', settings); computeAll(); renderPortfolio(); return; }
+  const pb = e.target.closest('[data-per]'); if(pb){ settings.period = pb.dataset.per; store.set('settings', settings); renderPortfolio(); return; }
   const sfb = e.target.closest('[data-sf]'); if(sfb){ scanFilter = sfb.dataset.sf; renderScan(); return; }
   const ab = e.target.closest('[data-add-cls]'); if(ab){ openForm(null, {cls:ab.dataset.addCls, sym:ab.dataset.addSym}); return; }
   const a = e.target.closest('[data-act]'); if(!a) return;
