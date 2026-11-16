@@ -444,7 +444,11 @@ function backtest(P){
   return {upN, upRate:upN ? upHit/upN : null, dnN, dnRate:dnN ? dnHit/dnN : null, all, baseUp:all ? allUp/all : null};
 }
 function outlook(closes){
-  if(!closes || closes.length < 201) return {insufficient:true};
+  if(!closes || closes.length < 201){
+    const n = closes ? closes.length : 0, ex = {insufficient:true, n};
+    if(n >= 22){ const P0 = prep(closes), c = P0.c, p = c[n-1]; ex.r1 = p/c[n-22]-1; ex.R = P0.rsi[n-1]; if(n >= 64) ex.r3 = p/c[n-64]-1; const s50 = P0.sma(n-1, 50); if(s50) ex.s50 = s50; ex.p = p; ex.first = closes[0][0]; }
+    return ex;
+  }
   const P = prep(closes); const sc = scoreAt(P, P.n-1, true); const bt = backtest(P); const d = dirOf(sc.s);
   let hit = null, N = 0, edge = null;
   if(d === 1){ hit = bt.upRate; N = bt.upN; if(hit != null) edge = hit - bt.baseUp; }
@@ -482,7 +486,7 @@ function advise(a){
     if(o.d !== 0 && o.conf.lvl <= 1) out.push('Not: bu sinyalin geçmiş isabeti zayıf. BES uzun vadeli bir birikim; yılda en fazla 12 fon değişikliği hakkın var, kısa vadeli sinyallerle sık değişiklik yapma.');
     return out;
   }
-  if(!o || o.insufficient){ out.push('Yeterli fiyat geçmişi yok (en az ~10 ay gerekir); sadece portföy kuralları uygulanıyor.'); return out; }
+  if(!o || o.insufficient){ out.push('Fiyat geçmişi kısa' + (o && o.n ? ` (${o.n} işlem günü)` : '') + '; yön sinyali için en az ~10 ay gerekir. Şimdilik sadece portföy kuralları uygulanıyor.' + (o && o.r1 != null ? ` Son 1 ay: ${pct(o.r1)}, RSI ${o.R.toFixed(0)}.` : '')); return out; }
   const w = a.weight || 0, pl = a.pl;
   if(o.d === -1){
     out.push(w > 0.15 ? `Düşüş eğiliminde ve portföyünün %${pc(w)}'i. Pozisyonu azaltmayı ya da bir zarar-durdur seviyesi belirlemeyi değerlendir.`
@@ -723,7 +727,7 @@ function outlookCard(title, sub, o, s, advice, newsList){
   if(!s){ return h + `<p class="muted small">Fiyat verisi yok.</p></div>`; }
   h += spark(s.closes);
   h += `<div class="row between small muted"><span>Son 6 ay</span><span>${s.time ? new Date(s.time).toLocaleString('tr-TR', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'}) : ''}${s.demo ? ' · demo' : ''}${s.stale ? ' · eski veri' : ''}</span></div>`;
-  if(!o || o.insufficient){ h += `<p class="muted small">Teknik görünüm için en az ~10 aylık fiyat geçmişi gerekiyor.</p>`; }
+  if(!o || o.insufficient){ h += `<p class="muted small">Tam teknik görünüm için ~10 aylık fiyat geçmişi gerekiyor${o && o.n ? ` (bu varlıkta ${o.n} işlem günü var)` : ''}. Sinyal ve geçmiş isabet hesaplanmıyor; eldeki veriyle özet:</p>${o && o.r1 != null ? `<div class="muted small">1 aylık getiri ${pct(o.r1)}${o.r3 != null ? ' · ~3 aylık ' + pct(o.r3) : ''} · RSI ${o.R.toFixed(0)}${o.s50 ? ' · fiyat 50g ortalamanın ' + (o.p > o.s50 ? 'üstünde' : 'altında') : ''}</div>` : ''}`; }
   else {
     h += `<div style="margin-top:12px" class="row between"><b>${o.label}</b><span class="small muted">Puan ${o.s > 0 ? '+' : ''}${o.s} / 6</span></div>
       <div class="meter"><i style="left:${((o.s + 6)/12*100).toFixed(1)}%"></i></div>
@@ -991,6 +995,7 @@ Tarih: ${new Date().toLocaleString('tr-TR')}${!settings.workerUrl ? '\nUYARI: Fi
 
 ## ${name} (${CLS[h.cls].label}${r.s && r.s.name && r.s.name !== h.sym ? ' — ' + r.s.name : ''})
 - Pozisyonum: ${fmtNum(h.qty, 4)} birim, ortalama maliyet ${h.cost ? fmtPx(h.cost) + cs : 'bilinmiyor'}, güncel ${fmtPx(r.price)}${cs}, K/Z ${pct(r.pl)}, ${pf.name} portföyümün %${pc(r.weight)}'i (portföy toplamı ${fmtTRY(totals.tot)})`;
+  if(o && o.insufficient && o.r1 != null) t += `\n- Teknik (fiyat geçmişi kısa, ${o.n} işlem günü): 1a getiri ${pct(o.r1)}${o.r3 != null ? ', ~3a ' + pct(o.r3) : ''}, RSI14 ${o.R.toFixed(0)}${o.s50 ? ', fiyat SMA50 ' + (o.p > o.s50 ? 'üstünde' : 'altında') : ''}; sinyal/geri test yok`;
   if(o && !o.insufficient) t += `\n- Teknik: SMA50 ${fmtPx(o.s50)}, SMA200 ${fmtPx(o.s200)}, RSI14 ${o.R.toFixed(0)}, getiri 1a ${pct(o.r1)} / 3a ${pct(o.r3)} / 6a ${pct(o.r6)}, Pusula puanı ${o.s > 0 ? '+' : ''}${o.s}/6 (${o.label})${o.hit != null ? `, sinyalin 2 yıllık geçmiş isabeti %${pc(o.hit)} (taban %${pc(o.d === 1 ? o.bt.baseUp : 1 - o.bt.baseUp)})` : ''}`;
   const my = rules.filter(x => x.hid === id);
   if(my.length) t += `\n- Uygulamanın uyarıları: ${my.map(x => x.title + ' (' + x.text + ')').join('; ')}`;
